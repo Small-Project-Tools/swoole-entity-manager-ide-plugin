@@ -1,6 +1,6 @@
 # Small Entity Manager — PhpStorm plugin (initial integration)
 
-A native IntelliJ Platform Kotlin plugin depending on the bundled PhpStorm PHP plugin.
+A native IntelliJ Platform Kotlin plugin requiring the PHP plugin at runtime. It compiles against IntelliJ IDEA Community 2025.1 because this implementation only references shared IntelliJ Platform APIs. The `plugin.xml` retains `<depends>com.jetbrains.php</depends>`.
 
 Features in this first integration:
 - Query field completion for `getFieldForCondition()`, `addOrderBy()`, and `addFieldToUpdate()`.
@@ -24,3 +24,5 @@ headless IDE searchable-options task because this plugin does not register any
 settings pages. Unit tests run with JUnit 5 without the large IntelliJ test
 framework. GitLab serializes heavy PhpStorm builds and retries one runner system
 failure; actual compiler/test failures are never retried or ignored.
+
+The IntelliJ Community build target reduces SDK size but does not independently verify PhpStorm runtime compatibility. Run Plugin Verifier or install in PhpStorm before publishing a release.
