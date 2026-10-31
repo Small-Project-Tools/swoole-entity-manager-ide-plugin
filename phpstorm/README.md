@@ -26,7 +26,7 @@ cd phpstorm
 gradle clean test buildPlugin --no-daemon
 ```
 
-The installable artifact is `build/distributions/small-entity-manager-phpstorm-0.1.0.zip`.
+The installable artifact is `build/distributions/small-entity-manager-phpstorm-<version>.zip`. Tagged CI pipelines use the Git tag as the version; local and branch builds default to `0.1.0`.
 In PhpStorm: **Settings → Plugins → gear icon → Install Plugin from Disk**, then select the ZIP.
 
 The Gradle build downloads small official JetBrains API JARs and creates the standard IntelliJ plugin ZIP layout (`small-entity-manager/lib/*.jar`).

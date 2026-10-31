@@ -71,6 +71,19 @@ Because this is a stateless **developer tool**, not a Small web application, no 
 - Requires semicolon namespace declarations and supports simple and grouped `use` imports. Complex trait adaptations, multi-property declarations and anonymous classes are not part of the first extraction contract.
 - Output describes symbols and completion candidates, not expression-level type checking or PHP execution. Caller must know the cursor position and query alias chain.
 
+## Tagged releases
+
+Pushing a tag creates a GitLab Release after the mandatory `quality → tests → build → deploy` checks.
+The `deploy` job uploads two versioned, durable assets to the GitLab Generic Package Registry:
+the shared PHP engine source archive and the installable PhpStorm plugin ZIP.
+The `gitlab_release` job publishes both download links in **Deploy → Releases** using the CI job token (no personal access token).
+
+Create a tag with `bin/release --dev|--patch|--minor|--major`, or push a tag yourself.
+The version embedded in the PhpStorm plugin matches `CI_COMMIT_TAG` on tagged builds.
+Branch builds retain the development version `0.1.0`.
+
+See [docs/releases.md](docs/releases.md).
+
 ## Copyright and license
 
 Copyright 2026 Sébastien Kus. MIT License; see [LICENSE](LICENSE).
