@@ -12,6 +12,7 @@ data class QueryContext(
 
 /** Conservative PHP source analysis for query literal completion, without executing PHP. */
 object QueryContextResolver {
+    const val MAX_SOURCE_LENGTH = 256 * 1024
     private val imports = Regex("""(?m)^\s*use\s+([\\\w]+)(?:\s+as\s+(\w+))?\s*;""")
     private val namespace = Regex("""\bnamespace\s+([\\\w]+)\s*;""")
     private val factory = Regex("""\$(\w+)\s*=\s*[^;]*?->\s*get\s*\(\s*(?:managerClass\s*:\s*)?([\\\w]+)::class""")
@@ -24,6 +25,7 @@ object QueryContextResolver {
     private data class OpenCall(val method: String, val open: Int)
 
     fun resolve(sourceBeforeCaret: String): QueryContext? {
+        if (sourceBeforeCaret.length > MAX_SOURCE_LENGTH) return null
         val call = activeCall(sourceBeforeCaret) ?: return null
         val parts = splitArgs(sourceBeforeCaret.substring(call.open + 1))
         val current = parts.lastOrNull()?.trim() ?: ""
@@ -120,12 +122,15 @@ object QueryContextResolver {
             }
             when (c) {
                 '\'', '"' -> quote = c
-                '(' -> stack.addLast(i)
+                '(' -> {
+                    if (stack.size >= 128) return null
+                    stack.addLast(i)
+                }
                 ')' -> if (stack.isNotEmpty()) stack.removeLast()
             }
         }
         for (at in stack.toList().asReversed()) {
-            val method = methodBeforeParen.find(source.substring(0, at))?.groupValues?.get(1) ?: continue
+            val method = methodBeforeParen.find(source.substring(maxOf(0, at - 96), at))?.groupValues?.get(1) ?: continue
             if (methodArgumentRole(method, null, 0) != null) return OpenCall(method, at)
         }
         return null

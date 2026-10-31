@@ -75,3 +75,7 @@ it with entity-aware literal suggestions.
 
 The resolver remains conservative; arbitrary dynamically computed manager
 classes and dynamic relation aliases are not inferred.
+
+## Stability and firstCondition completion
+
+Completion runs the PHP metadata indexer on a single background worker, never under the editor read action. Results are cached for two minutes and the dropdown is retriggered when the first background scan finishes. If auto-popup is disabled in PhpStorm, press Ctrl+Space again after the initial scan. Timeouts and process output are bounded; malformed or too-large PHP files cause the plugin to return no suggestions rather than block the IDE. The plugin does not override native PhpStorm completion of the `ConditionOperatorType` enum in `firstCondition()`.
