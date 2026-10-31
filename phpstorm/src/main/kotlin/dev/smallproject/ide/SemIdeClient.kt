@@ -41,7 +41,7 @@ object SemIdeClient {
         if (!root.isDirectory || !binary.isFile) return emptyList()
         val output = Files.createTempFile("small-ide-", ".json")
         try {
-            val process = ProcessBuilder("php", binary.absolutePath, "complete", root.absolutePath, encodeRequest(context))
+            val process = ProcessBuilder("php", "-d", "memory_limit=256M", binary.absolutePath, "complete", root.absolutePath, encodeRequest(context))
                 .directory(root)
                 .redirectOutput(output.toFile())
                 .redirectError(ProcessBuilder.Redirect.DISCARD)

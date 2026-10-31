@@ -1,6 +1,6 @@
 plugins { kotlin("jvm") version "2.3.20" }
 group = "dev.smallproject"
-version = providers.environmentVariable("CI_COMMIT_TAG").orElse("0.1.0").get().ifBlank { "0.1.0" }
+version = providers.environmentVariable("CI_COMMIT_TAG").orElse("0.2.5-dev-1").get().ifBlank { "0.2.5-dev-1" }
 repositories {
   mavenCentral()
   maven("https://www.jetbrains.com/intellij-repository/releases")

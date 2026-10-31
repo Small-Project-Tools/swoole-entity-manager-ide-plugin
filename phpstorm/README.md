@@ -1,4 +1,4 @@
-# Small Entity Manager — PhpStorm plugin (0.1.0)
+# Small Entity Manager — PhpStorm plugin
 
 ![Small Entity Manager PhpStorm plugin](assets/plugin-logo.png)
 
@@ -30,7 +30,7 @@ cd phpstorm
 gradle clean test buildPlugin --no-daemon
 ```
 
-The installable artifact is `build/distributions/small-entity-manager-phpstorm-<version>.zip`. Tagged CI pipelines use the Git tag as the version; local and branch builds default to `0.1.0`.
+The installable artifact is `build/distributions/small-entity-manager-phpstorm-<version>.zip`. Tagged CI pipelines use the Git tag as the version; local and branch builds default to `0.2.5-dev-1`, newer than the last tagged release `0.2.4`.
 In PhpStorm: **Settings → Plugins → gear icon → Install Plugin from Disk**, then select the ZIP.
 
 The Gradle build downloads small official JetBrains API JARs and creates the standard IntelliJ plugin ZIP layout (`small-entity-manager/lib/*.jar`).
@@ -79,3 +79,5 @@ classes and dynamic relation aliases are not inferred.
 ## Stability and firstCondition completion
 
 Completion runs the PHP metadata indexer on a single background worker, never under the editor read action. Results are cached for two minutes and the dropdown is retriggered when the first background scan finishes. If auto-popup is disabled in PhpStorm, press Ctrl+Space again after the initial scan. Timeouts and process output are bounded; malformed or too-large PHP files cause the plugin to return no suggestions rather than block the IDE. The plugin does not override native PhpStorm completion of the `ConditionOperatorType` enum in `firstCondition()`.
+
+The bundled PHP indexer is started with a 256 MB PHP memory limit to prevent a runaway completion scan from exhausting the developer machine's memory.
