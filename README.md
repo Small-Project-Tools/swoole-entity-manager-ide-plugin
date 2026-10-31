@@ -1,6 +1,6 @@
 # Small Entity Manager IDE Core
 
-Static, read-only project metadata for **Small Swoole Entity Manager Core 3** and the compatible **Symfony Bundle 2**. This repository contains the common engine shared by the future VS Code and PhpStorm integrations; **it does not contain either editor plugin**.
+Static, read-only project metadata for **Small Swoole Entity Manager Core 3** and the compatible **Symfony Bundle 2**. This repository contains the common engine shared by the VS Code and PhpStorm integrations. The initial **PhpStorm plugin** is in [phpstorm/](phpstorm/); the VS Code adapter is not yet implemented.
 
 ## Features
 

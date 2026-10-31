@@ -1,30 +1,46 @@
-# Small Entity Manager — PhpStorm plugin (initial integration)
+# Small Entity Manager — PhpStorm plugin (0.1.0)
 
-A native IntelliJ Platform Kotlin plugin requiring the PHP plugin at runtime. It compiles against IntelliJ IDEA Community 2025.1 because this implementation only references shared IntelliJ Platform APIs. The `plugin.xml` retains `<depends>com.jetbrains.php</depends>`.
+A native IntelliJ Platform plugin for PhpStorm 2025.1+.
+The JAR is compiled against official, individually published JetBrains IntelliJ Platform 2025.1 API modules (build 251.23774.435), not a downloaded IDE installer.
+The `plugin.xml` declares a mandatory dependency on `com.jetbrains.php`; the plugin is intended for PhpStorm and other IDEs with that plugin installed.
 
-Features in this first integration:
-- Query field completion for `getFieldForCondition()`, `addOrderBy()`, and `addFieldToUpdate()`.
-- Relation and alias suggestions for `join()`, `innerJoin()`, `leftJoin()`, and `rightJoin()`.
-- Uses the shared `sem-ide complete` JSON protocol, no duplicate ORM indexer.
-- Bounded CLI execution; does not execute application PHP classes.
+## Supported completions
 
-Requirements: PhpStorm 2025.1+, JDK 21 for the build, `php` on PATH, and `vendor/bin/sem-ide` in the opened PHP project (install `small/entity-manager-ide-core` as a dev Composer dependency).
+- Query fields in `getFieldForCondition()`, `addOrderBy()` and `addFieldToUpdate()`.
+- Relations and aliases in `join()`, `innerJoin()`, `leftJoin()` and `rightJoin()`.
+- Previously referenced named placeholders in `setParameter()`.
+- Basic manager resolution via `$factory->get(YourManager::class)`, import aliases and `@var` documentation.
+- The PHP CLI `sem-ide complete` supplies candidate names using the shared metadata index.
 
-Build: `./gradlew buildPlugin` (or `gradle buildPlugin`). Artifact: `build/distributions/*.zip`.
+## Requirements
 
-Limitations: conservative text-based analysis (not full PHP PSI). Complex fluent expressions, contextual hover documentation, factory return-type inference and PSI navigation are not yet implemented. Named parameter completions are derived from previously seen placeholders. The plugin deliberately returns no candidates for unresolved contexts.
+- PhpStorm 2025.1 or newer, with its bundled PHP plugin enabled.
+- PHP CLI on the PATH.
+- `small/entity-manager-ide-core` installed in the opened PHP project, providing `vendor/bin/sem-ide`.
+- JDK 21 and Gradle 9.2.1 for building.
 
-The CLI integration now uses a testable SemIdeClient and a 3-second cache for repeated requests. The CI job phpstorm_build compiles and packages the plugin on every commit, and publishes its ZIP as a build artifact when successful.
+## Build and installation
 
-## CI resource management
+```sh
+cd phpstorm
+gradle clean test buildPlugin --no-daemon
+```
 
-The Gradle build uses versions compatible with Gradle 9.2.1, limits worker
-concurrency, compiles Kotlin inside the bounded Gradle JVM, and disables the
-headless IDE searchable-options task because this plugin does not register any
-settings pages. Unit tests run with JUnit 5 without the large IntelliJ test
-framework. GitLab serializes heavy PhpStorm builds and retries one runner system
-failure; actual compiler/test failures are never retried or ignored.
+The installable artifact is `build/distributions/small-entity-manager-phpstorm-0.1.0.zip`.
+In PhpStorm: **Settings → Plugins → gear icon → Install Plugin from Disk**, then select the ZIP.
 
-The IntelliJ Community build target reduces SDK size but does not independently verify PhpStorm runtime compatibility. Run Plugin Verifier or install in PhpStorm before publishing a release.
+The Gradle build downloads small official JetBrains API JARs and creates the standard IntelliJ plugin ZIP layout (`small-entity-manager/lib/*.jar`).
+The plugin manifest is embedded in that JAR and includes the version and minimum IDE build.
 
-The compile target uses JetBrains' multi-OS IDEA Community archive (`useInstaller = false`), which omits the bundled JBR and reduces extraction pressure. This is intended for compilation and ZIP packaging, not running the IDE or validating the plugin inside PhpStorm.
+## Validation
+
+The Kotlin/JUnit tests and plugin ZIP build run on every GitLab commit.
+The offline PHP indexing engine has separate Pest and PHPStan quality gates.
+The plugin has not yet been tested by launching an actual PhpStorm instance or by JetBrains Plugin Verifier; these remain release requirements.
+
+## Known limitations
+
+- Parsing is conservative and text-based rather than full PHP PSI; complex fluent expressions may not resolve.
+- No factory return-type provider, PHP PSI navigation, or hover documentation yet.
+- The Kotlin adapter uses a short cache and synchronous CLI calls; future improvements should use background execution.
+- When no manager or relationship is resolved, no speculative candidates are produced.

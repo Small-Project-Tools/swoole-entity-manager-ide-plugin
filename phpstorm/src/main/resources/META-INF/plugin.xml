@@ -1,6 +1,8 @@
 <idea-plugin>
   <id>dev.smallproject.entitymanager</id>
   <name>Small Entity Manager</name>
+  <version>${pluginVersion}</version>
+  <idea-version since-build="251"/>
   <vendor url="https://git.small-project.dev/pub/small-entity-manager-ide-core">Small Project</vendor>
   <description><![CDATA[Completion of Small Swoole Entity Manager fields, relations, aliases, and manager factory classes. Requires the sem-ide CLI in the project.]]></description>
   <depends>com.intellij.modules.platform</depends>
