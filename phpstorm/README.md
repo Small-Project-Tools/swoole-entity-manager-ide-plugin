@@ -20,7 +20,7 @@ The `plugin.xml` declares a mandatory dependency on `com.jetbrains.php`; the plu
 
 - PhpStorm 2025.1 or newer, with its bundled PHP plugin enabled.
 - PHP CLI on the PATH.
-- `small/entity-manager-ide-core` installed in the opened PHP project, providing `vendor/bin/sem-ide`.
+- No Composer installation of the engine is required: the ZIP bundles the offline `sem-ide` CLI. A project-local `vendor/bin/sem-ide` takes precedence.
 - JDK 21 and Gradle 9.2.1 for building.
 
 ## Build and installation
@@ -48,3 +48,30 @@ The plugin has not yet been tested by launching an actual PhpStorm instance or b
 - No factory return-type provider, PHP PSI navigation, or hover documentation yet.
 - The Kotlin adapter uses a short cache and synchronous CLI calls; future improvements should use background execution.
 - When no manager or relationship is resolved, no speculative candidates are produced.
+
+## Completion and method signatures
+
+Use **Ctrl+Space** inside a supported string argument to open the completion dropdown.
+The plugin now resolves named factory arguments (`managerClass:`), imported manager
+classes, query builders stored in variables, and multiline fluent chains with joins.
+It matches the full typed string prefix (including dots in projections).
+Completions include entity fields, relation names, existing aliases, projections
+and parameter placeholders. The PHP CLI is bundled in the plugin ZIP.
+
+Relevant public Core 3 signatures:
+- `createQueryBuilder(?string $alias = null): QueryBuilder`
+- `leftJoin(string $fromAlias, string $relationAlias, ?string $alias = null): LeftJoinBuilder`
+- `endJoin(): QueryBuilder`
+- `getFieldForCondition(string $fieldName, ?string $entityAlias = null): ConditionField`
+- `where(): Bracket`
+- `firstCondition(string|int|QueryBuilder|ConditionField $var1, ConditionOperatorType $operator, ...): Bracket`
+
+**Important:** `firstCondition(var1: 'person.deletedAt IS NULL')` is not an ORM
+field expression and is missing the mandatory `operator` argument. Use
+`$query->getFieldForCondition('deletedAt', 'person')` as `var1` and
+`ConditionOperatorType::isNull` as `operator`. PhpStorm itself provides
+parameter information for these method signatures; the plugin complements
+it with entity-aware literal suggestions.
+
+The resolver remains conservative; arbitrary dynamically computed manager
+classes and dynamic relation aliases are not inferred.

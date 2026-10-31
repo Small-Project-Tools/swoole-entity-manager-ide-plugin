@@ -29,4 +29,7 @@ tasks.register<Zip>("buildPlugin") {
     archiveFileName = "small-entity-manager-phpstorm-" + project.version + ".zip"
     destinationDirectory = layout.buildDirectory.dir("distributions")
     from(tasks.named("jar")) { into("small-entity-manager/lib") }
+    // The offline CLI has no Composer runtime dependencies: bundle it with the IDE plugin.
+    from(rootProject.file("../src")) { into("small-entity-manager/core/src") }
+    from(rootProject.file("../bin/sem-ide")) { into("small-entity-manager/core/bin") }
 }

@@ -55,6 +55,15 @@ final class CompletionService
                 $aliases[$alias] = $target;
             }
         }
+        if ($kind === 'projection') {
+            $projections = [];
+            foreach ($aliases as $aliasName => $entityClass) {
+                foreach (array_keys($index['entities'][$entityClass]['fields']) as $field) {
+                    $projections[] = $aliasName . '.' . $field;
+                }
+            }
+            return $this->items($projections, 'projection');
+        }
         if ($kind === 'alias') {
             return $this->items(array_keys($aliases), 'alias');
         }
