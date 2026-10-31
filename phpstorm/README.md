@@ -1,5 +1,9 @@
 # Small Entity Manager — PhpStorm plugin (0.1.0)
 
+![Small Entity Manager PhpStorm plugin](assets/plugin-logo.png)
+
+The plugin icon uses the supplied Small Entity Manager artwork; its SVG is bundled as `META-INF/pluginIcon.svg` for the JetBrains Plugins interface.
+
 A native IntelliJ Platform plugin for PhpStorm 2025.1+.
 The JAR is compiled against official, individually published JetBrains IntelliJ Platform 2025.1 API modules (build 251.23774.435), not a downloaded IDE installer.
 The `plugin.xml` declares a mandatory dependency on `com.jetbrains.php`; the plugin is intended for PhpStorm and other IDEs with that plugin installed.
