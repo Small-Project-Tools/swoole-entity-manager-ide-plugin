@@ -11,7 +11,7 @@ object QueryContextResolver {
     private val factory = Regex("""\$(\w+)\s*=\s*\$\w+\s*->\s*get\s*\(\s*([\\\w]+)::class\s*\)""")
     private val builder = Regex("""\$(\w+)\s*=\s*\$(\w+)\s*->\s*create(?:Scallar|Stats|Update|Delete)?QueryBuilder\s*\(\s*(?:['"]([^'"]+)['"])?""")
     private val joinsRegex = Regex("""->\s*(?:innerJoin|leftJoin|rightJoin|join)\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"](?:\s*,\s*['"]([^'"]+)['"])?""")
-    private val phpDoc = Regex("""@var\s+([\\\w]+Manager)\s+\$(\w+)""")
+    private val phpDoc = Regex("""@var\s+([\\w]+Manager)\s+\$(\w+)""")
     private val methods = mapOf(
         "getFieldForCondition" to "field", "addOrderBy" to "field", "addFieldToUpdate" to "field",
         "join" to "relation", "innerJoin" to "relation", "leftJoin" to "relation", "rightJoin" to "relation",
@@ -31,8 +31,18 @@ object QueryContextResolver {
             else -> return null
         }
         val managerVars = mutableMapOf<String, String>()
-        for (m in factory.findAll(prefix)) managerVars[m.groupValues[1]] = m.groupValues[2].trimStart('\\')
-        for (m in phpDoc.findAll(prefix)) managerVars[m.groupValues[2]] = m.groupValues[1].trimStart('\\')
+        val imports = Regex("""use\s+([\\\w]+Manager)(?:\s+as\s+(\w+))?\s*;""")
+            .findAll(prefix).associate { match ->
+                val fqn = match.groupValues[1].trimStart('\\')
+                val shortName = match.groupValues[2].ifBlank { fqn.substringAfterLast('\\') }
+                shortName to fqn
+            }
+        fun resolveManager(name: String): String {
+            val cleaned = name.trimStart('\\')
+            return imports[cleaned] ?: cleaned
+        }
+        for (m in factory.findAll(prefix)) managerVars[m.groupValues[1]] = resolveManager(m.groupValues[2])
+        for (m in phpDoc.findAll(prefix)) managerVars[m.groupValues[2]] = resolveManager(m.groupValues[1])
         val builders = mutableMapOf<String, Pair<String, String?>>()
         for (m in builder.findAll(prefix)) {
             val manager = managerVars[m.groupValues[2]] ?: continue
