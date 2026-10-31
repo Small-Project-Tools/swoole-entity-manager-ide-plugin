@@ -8,26 +8,31 @@ declare(strict_types=1);
 
 namespace Small\EntityManagerIde\Analysis;
 
-/** Token operations; no autoloading or execution of code being indexed. */
+/**
+ * Token operations; no autoloading or execution of code being indexed.
+ * @phpstan-type PhpToken string|array{int,string,int}
+ */
 final class TokenUtility
 {
-    /** @param array<int, mixed> $tokens */
+    /** @param array<int, PhpToken> $tokens */
     public static function contents(array $tokens): string
     {
         return implode('', array_map(static fn (mixed $token): string => is_array($token) ? $token[1] : (string) $token, $tokens));
     }
 
-    public static function value(mixed $token): string
+    /** @param PhpToken $token */
+    public static function value(string|array $token): string
     {
         return is_array($token) ? $token[1] : (string) $token;
     }
 
-    public static function is(mixed $token, int $id): bool
+    /** @param PhpToken $token */
+    public static function is(string|array $token, int $id): bool
     {
         return is_array($token) && $token[0] === $id;
     }
 
-    /** @param array<int, mixed> $tokens */
+    /** @param array<int, PhpToken> $tokens */
     public static function nextSignificant(array $tokens, int $from): int
     {
         $max = count($tokens);
@@ -37,7 +42,7 @@ final class TokenUtility
         return $from;
     }
 
-    /** @param array<int, mixed> $tokens */
+    /** @param array<int, PhpToken> $tokens */
     public static function previousSignificant(array $tokens, int $from): int
     {
         while ($from >= 0 && is_array($tokens[$from]) && in_array($tokens[$from][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
@@ -90,7 +95,7 @@ final class TokenUtility
         return $pieces;
     }
 
-    /** @param array<int, mixed> $tokens
+    /** @param array<int, PhpToken> $tokens
      * @return array{string, int} */
     public static function until(array $tokens, int $from, string $delimiter): array
     {

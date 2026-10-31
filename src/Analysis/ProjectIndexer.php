@@ -13,7 +13,15 @@ use RecursiveIteratorIterator;
 use Small\EntityManagerIde\Metadata\ApiCatalog;
 use SplFileInfo;
 
-/** An offline, read-only indexer: it never requires or evaluates project PHP files. */
+/**
+ * An offline, read-only indexer: it never requires or evaluates project PHP files.
+ * @phpstan-import-type OrmSymbol from PhpFileParser
+ * @phpstan-type IndexedField array{name:string,primaryKey:bool,databaseName:?string,file:string,line:int}
+ * @phpstan-type IndexedRelation array{name:string,cardinality:string,manager:?string,file:string,line:int}
+ * @phpstan-type EntityInfo array{class:string,file:string,line:int,fields:array<string,IndexedField>,relations:array<string,IndexedRelation>}
+ * @phpstan-type ManagerInfo array{class:string,entity:string,connection:?string,file:string,line:int}
+ * @phpstan-type Index array{schemaVersion:int,engine:string,entities:array<string,EntityInfo>,managers:array<string,ManagerInfo>,api:array<string,mixed>,diagnostics:list<array<string,mixed>>}
+ */
 final class ProjectIndexer
 {
     private const ENTITY = 'Small\\SwooleEntityManager\\EntityManager\\Attribute\\Entity';
@@ -28,14 +36,14 @@ final class ProjectIndexer
     {
     }
 
-    /** @return array<string, mixed> */
+    /** @return Index */
     public function index(string $root): array
     {
         $realRoot = realpath($root);
         if ($realRoot === false || !is_dir($realRoot)) {
             throw new \InvalidArgumentException('Project root does not exist: ' . $root);
         }
-        /** @var array<string, array<string, mixed>> $symbols */
+        /** @var array<string, OrmSymbol> $symbols */
         $symbols = [];
         /** @var list<array<string, mixed>> $diagnostics */
         $diagnostics = [];
@@ -68,7 +76,9 @@ final class ProjectIndexer
                 $diagnostics[] = ['code' => 'parse-error', 'file' => $relative, 'message' => $error->getMessage()];
             }
         }
+        /** @var array<string, EntityInfo> $entities */
         $entities = [];
+        /** @var array<string, ManagerInfo> $managers */
         $managers = [];
         foreach ($symbols as $name => $symbol) {
             if ($symbol['kind'] !== 'class') {
@@ -141,10 +151,10 @@ final class ProjectIndexer
         return null;
     }
 
-    /** @param array<string, mixed> $symbol
-     * @param array<string, array<string, mixed>> $symbols
-     * @param array<string, array<string, mixed>> $fields
-     * @param array<string, array<string, mixed>> $relations
+    /** @param OrmSymbol $symbol
+     * @param array<string, OrmSymbol> $symbols
+     * @param array<string, IndexedField> $fields
+     * @param array<string, IndexedRelation> $relations
      * @param array<string, bool> $visited */
     private function collectProperties(array $symbol, array $symbols, array &$fields, array &$relations, array &$visited): void
     {
@@ -192,7 +202,7 @@ final class ProjectIndexer
     }
 
     /** @param array{name:string,args:string} $attribute
-     * @param array<string, mixed> $symbol */
+     * @param OrmSymbol $symbol */
     private function classArgument(array $attribute, array $symbol, int $position, string $key): ?string
     {
         $expression = $this->argument($attribute['args'], $position, $key);

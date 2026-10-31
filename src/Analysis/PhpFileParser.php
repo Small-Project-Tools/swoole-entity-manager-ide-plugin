@@ -8,21 +8,26 @@ declare(strict_types=1);
 
 namespace Small\EntityManagerIde\Analysis;
 
-/** Conservative tokenizer-based extraction of constant ORM attribute metadata. */
+/**
+ * Conservative tokenizer-based extraction of constant ORM attribute metadata.
+ * @phpstan-type OrmAttribute array{name:string,args:string}
+ * @phpstan-type OrmProperty array{name:string,attributes:list<OrmAttribute>,line:int}
+ * @phpstan-type OrmSymbol array{name:string,kind:string,namespace:string,imports:array<string,string>,file:string,line:int,attributes:list<OrmAttribute>,properties:list<OrmProperty>,traits:list<string>,parent:string|null}
+ */
 final class PhpFileParser
 {
-    /** @return list<array<string, mixed>> */
+    /** @return list<OrmSymbol> */
     public function parse(string $content, string $file): array
     {
         $tokens = token_get_all($content);
         $namespace = '';
         /** @var array<string, string> $imports */
         $imports = [];
-        /** @var list<array<string, mixed>> $classes */
+        /** @var list<OrmSymbol> $classes */
         $classes = [];
         /** @var list<array{name:string,args:string}> $pending */
         $pending = [];
-        /** @var array<string, mixed>|null $current */
+        /** @var OrmSymbol|null $current */
         $current = null;
         $depth = 0;
         $classDepth = -1;
@@ -129,12 +134,12 @@ final class PhpFileParser
                     }
                     [$declaration, $end] = TokenUtility::until($tokens, $i + 1, ';');
                     if (!str_contains($declaration, 'function ') && preg_match('/\$([A-Za-z_][A-Za-z0-9_]*)/', $declaration, $found) === 1) {
-                        /** @var list<array<string, string>> $properties */
+                        /** @var list<OrmProperty> $properties */
                         $properties = $current['properties'];
                         $properties[] = [
                             'name' => $found[1],
                             'attributes' => $pending,
-                            'line' => is_array($token) ? $token[2] : 0,
+                            'line' => $token[2],
                         ];
                         $current['properties'] = $properties;
                         $i = $end;

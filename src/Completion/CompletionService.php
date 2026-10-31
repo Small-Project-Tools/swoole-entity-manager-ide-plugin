@@ -8,13 +8,18 @@ declare(strict_types=1);
 
 namespace Small\EntityManagerIde\Completion;
 
-/** IDE-agnostic request: kind, manager/entity, optional query alias and ordered joins. */
+use Small\EntityManagerIde\Analysis\ProjectIndexer;
+
+/**
+ * IDE-agnostic request: kind, manager/entity, optional query alias and ordered joins.
+ * @phpstan-import-type Index from ProjectIndexer
+ */
 final class CompletionService
 {
     /**
-     * @param array<string, mixed> $index
-     * @param array<string, mixed> $context
-     * @return list<array<string, mixed>>
+     * @param Index $index
+     * @param array{kind?:string,manager?:string,entity?:string,rootAlias?:string,joins?:list<array{fromAlias?:string,relation?:string,alias?:string}>,alias?:string,parameters?:list<string>} $context
+     * @return list<array{label:string,kind:string}>
      */
     public function complete(array $index, array $context): array
     {
@@ -26,7 +31,10 @@ final class CompletionService
             return $this->items($context['parameters'] ?? [], 'parameter');
         }
         $manager = $context['manager'] ?? null;
-        $entity = $context['entity'] ?? ($index['managers'][$manager]['entity'] ?? null);
+        $entity = $context['entity'] ?? null;
+        if ($entity === null && is_string($manager)) {
+            $entity = $index['managers'][$manager]['entity'] ?? null;
+        }
         if (!is_string($entity) || !isset($index['entities'][$entity])) {
             return [];
         }
@@ -34,9 +42,6 @@ final class CompletionService
         $mainAlias = $context['rootAlias'] ?? lcfirst($lastSeparator === false ? $entity : substr($entity, $lastSeparator + 1));
         $aliases = [$mainAlias => $entity];
         foreach ($context['joins'] ?? [] as $join) {
-            if (!is_array($join)) {
-                continue;
-            }
             $fromAlias = $join['fromAlias'] ?? null;
             $relation = $join['relation'] ?? null;
             $alias = $join['alias'] ?? $relation;
@@ -45,7 +50,7 @@ final class CompletionService
             }
             $fromEntity = $aliases[$fromAlias];
             $targetManager = $index['entities'][$fromEntity]['relations'][$relation]['manager'] ?? null;
-            $target = $index['managers'][$targetManager]['entity'] ?? null;
+            $target = is_string($targetManager) ? ($index['managers'][$targetManager]['entity'] ?? null) : null;
             if (is_string($target) && isset($index['entities'][$target])) {
                 $aliases[$alias] = $target;
             }
