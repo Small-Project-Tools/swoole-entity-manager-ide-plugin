@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+[ "$#" -eq 1 ] || { echo 'Usage: bin/release --dev|--patch|--minor|--major' >&2; exit 2; }
+case "$1" in --dev|--patch|--minor|--major) ;; *) exit 2;; esac
+[ -z "$(git status --porcelain)" ] || { echo 'Working tree must be clean' >&2; exit 1; }
+latest=$(git tag --list '[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)
+latest=${latest:-0.0.0}
+base=${latest%%-dev-*}
+major=$(printf '%s' "$base" | cut -d. -f1)
+minor=$(printf '%s' "$base" | cut -d. -f2)
+patch=$(printf '%s' "$base" | cut -d. -f3)
+case "$1" in
+  --major) next="$((major+1)).0.0" ;;
+  --minor) next="$major.$((minor+1)).0" ;;
+  --patch) case "$latest" in *-dev-*) next="$base";; *) next="$major.$minor.$((patch+1))";; esac ;;
+  --dev) case "$latest" in *-dev-*) rev=${latest##*-dev-}; next="$base-dev-$((rev+1))";; *) if [ "$latest" = 0.0.0 ]; then next=0.1.0-dev-1; else next="$major.$minor.$((patch+1))-dev-1"; fi;; esac ;;
+esac
+printf 'Releasing %s\n' "$next"
+git tag -a "$next" -m "release: $next"
+git push origin "$next"

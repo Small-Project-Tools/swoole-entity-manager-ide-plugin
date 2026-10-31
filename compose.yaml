@@ -1,0 +1,5 @@
+services:
+  app:
+    build: .
+    working_dir: /app
+    command: ["php", "bin/self-test"]

@@ -1,0 +1,43 @@
+#!/usr/bin/env php
+<?php
+/* SMALL-IDE-COPYRIGHT
+ * Copyright 2026 - Sébastien Kus
+ * Under MIT license
+ */
+
+declare(strict_types=1);
+
+require __DIR__ . '/../src/Autoload.php';
+
+use Small\EntityManagerIde\Analysis\ProjectIndexer;
+use Small\EntityManagerIde\Completion\CompletionService;
+
+function check(bool $ok, string $message): void
+{
+    if (!$ok) {
+        throw new RuntimeException($message);
+    }
+}
+
+$index = (new ProjectIndexer())->index(__DIR__ . '/../tests/Functional/Fixtures/Project');
+check($index['schemaVersion'] === 1, 'Invalid schema version');
+check($index['diagnostics'] === [], 'Unexpected diagnostics');
+$user = $index['entities']['Demo\\Entity\\User'] ?? null;
+check(is_array($user), 'User entity missing');
+check(array_keys($user['fields']) === ['companyId', 'createdAt', 'email', 'id'], 'Invalid fields or inherited trait');
+check($user['fields']['email']['databaseName'] === 'email_address', 'Named argument mapping failed');
+check($user['relations']['company']['manager'] === 'Demo\\EntityManager\\CompanyManager', 'Relation manager unresolved');
+check($index['managers']['Demo\\EntityManager\\UserManager']['connection'] === 'app', 'Connection mapping failed');
+$service = new CompletionService();
+$context = [
+    'kind' => 'field',
+    'manager' => 'Demo\\EntityManager\\UserManager',
+    'rootAlias' => 'user',
+    'alias' => 'owner',
+    'joins' => [['fromAlias' => 'user', 'relation' => 'company', 'alias' => 'owner']],
+];
+check(array_column($service->complete($index, $context), 'label') === ['id', 'name'], 'Joined field completion failed');
+$context['alias'] = 'not-found';
+check($service->complete($index, $context) === [], 'Unknown alias must not complete');
+check($index['api']['factory']['Small\\SwooleEntityManagerBundle\\Contract\\EntityManagerFactoryInterface::get']['returns'] === 'class-string-argument:0', 'Factory contract mismatch');
+echo "OK: index, imports, traits, relations, joins, aliases and factory metadata\n";

@@ -1,0 +1,47 @@
+stages:
+  - quality
+  - tests
+  - build
+  - deploy
+
+default:
+  image: composer:2
+  before_script:
+    - composer install --prefer-dist --no-interaction --no-progress
+
+quality:
+  stage: quality
+  script:
+    - php bin/self-test
+    - find src tests bin -type f \( -name '*.php' -o -name 'sem-ide' -o -name 'self-test' \) -exec php -l {} \;
+    - vendor/bin/phpstan analyse --no-progress
+    - php bin/apply-copyright.php --check
+  rules:
+    - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
+
+tests:
+  stage: tests
+  script:
+    - vendor/bin/pest --testsuite=Unit
+    - vendor/bin/pest --testsuite=Functional
+  rules:
+    - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
+
+build:
+  stage: build
+  script:
+    - mkdir -p dist
+    - tar --exclude=vendor --exclude=dist --exclude=.git -czf "dist/small-entity-manager-ide-core-${CI_COMMIT_TAG}.tar.gz" .
+  artifacts:
+    paths: [dist/]
+  rules:
+    - if: '$CI_COMMIT_TAG'
+
+deploy:
+  stage: deploy
+  needs: [build]
+  before_script: []
+  script:
+    - 'curl --fail --show-error --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "dist/small-entity-manager-ide-core-${CI_COMMIT_TAG}.tar.gz" "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/small-entity-manager-ide-core/${CI_COMMIT_TAG}/small-entity-manager-ide-core-${CI_COMMIT_TAG}.tar.gz"'
+  rules:
+    - if: '$CI_COMMIT_TAG'

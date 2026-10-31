@@ -1,0 +1,43 @@
+#!/usr/bin/env php
+<?php
+/* SMALL-IDE-COPYRIGHT
+ * Copyright 2026 - Sébastien Kus
+ * Under MIT license
+ */
+
+declare(strict_types=1);
+
+use Small\EntityManagerIde\Analysis\ProjectIndexer;
+use Small\EntityManagerIde\Completion\CompletionService;
+
+if (is_file(__DIR__ . '/../vendor/autoload.php')) {
+    require __DIR__ . '/../vendor/autoload.php';
+} else {
+    require __DIR__ . '/../src/Autoload.php';
+}
+
+try {
+    $command = $argv[1] ?? 'help';
+    if ($command === 'help' || $command === '--help') {
+        echo "Small Entity Manager IDE Core\n";
+        echo "  sem-ide index <project-root>\n";
+        echo "  sem-ide complete <project-root> '<JSON-context>'\n";
+        exit(0);
+    }
+    if ($command !== 'index' && $command !== 'complete') {
+        throw new InvalidArgumentException('Unknown command: ' . $command);
+    }
+    $index = (new ProjectIndexer())->index($argv[2] ?? getcwd());
+    $result = $index;
+    if ($command === 'complete') {
+        $request = json_decode($argv[3] ?? '{}', true, 512, JSON_THROW_ON_ERROR);
+        if (!is_array($request)) {
+            throw new InvalidArgumentException('Context must be a JSON object.');
+        }
+        $result = (new CompletionService())->complete($index, $request);
+    }
+    echo json_encode($result, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+} catch (Throwable $exception) {
+    fwrite(STDERR, $exception->getMessage() . "\n");
+    exit(1);
+}

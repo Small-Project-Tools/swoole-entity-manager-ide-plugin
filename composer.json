@@ -1,0 +1,26 @@
+{
+  "name": "small/entity-manager-ide-core",
+  "description": "Dependency-free static metadata index and IDE completion contract for Small Swoole Entity Manager Core and Bundle",
+  "type": "library",
+  "bin": ["bin/sem-ide"],
+  "license": "MIT",
+  "require": {
+    "php": ">=8.4",
+    "ext-json": "*",
+    "ext-tokenizer": "*"
+  },
+  "require-dev": {
+    "phpstan/phpstan": "^2.1",
+    "pestphp/pest": "^3.8 || ^4.0"
+  },
+  "autoload": {
+    "psr-4": {"Small\\EntityManagerIde\\": "src/"}
+  },
+  "scripts": {
+    "analyse": "phpstan analyse --no-progress",
+    "test": "pest",
+    "test:unit": "pest --testsuite Unit",
+    "test:functional": "pest --testsuite Functional"
+  },
+  "config": {"allow-plugins": {"pestphp/pest-plugin": true}}
+}

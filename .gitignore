@@ -1,0 +1,9 @@
+/vendor/
+/.phpunit.cache/
+/.phpunit.result.cache
+/.phpunit-watcher.yml
+/.idea/
+/.vscode/
+/dist/
+/.sem-ide-index.json
+composer.lock

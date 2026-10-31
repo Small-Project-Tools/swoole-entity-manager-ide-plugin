@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+php bin/apply-copyright.php --check
+vendor/bin/phpstan analyse --no-progress
+vendor/bin/pest --testsuite=Unit
