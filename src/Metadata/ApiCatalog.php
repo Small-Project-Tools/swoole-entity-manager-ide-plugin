@@ -33,7 +33,7 @@ final class ApiCatalog
                 ],
             ],
             'query' => [
-                'createQueryBuilder' => ['returns' => 'QueryBuilder', 'aliasArgument' => 0, 'signature' => 'createQueryBuilder(?string $alias = null): QueryBuilder'],
+                'createQueryBuilder' => ['returns' => 'select', 'returnClass' => 'QueryBuilder', 'aliasArgument' => 0, 'signature' => 'createQueryBuilder(?string $alias = null): QueryBuilder'],
                 'createScallarQueryBuilder' => ['returns' => 'scalar', 'aliasArgument' => 0],
                 'createStatsQueryBuilder' => ['returns' => 'stats', 'aliasArgument' => 0],
                 'createUpdateBuilder' => ['returns' => 'update', 'aliasArgument' => 0],
