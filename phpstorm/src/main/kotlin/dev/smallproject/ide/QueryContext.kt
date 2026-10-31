@@ -63,7 +63,18 @@ object QueryContextResolver {
             if (activeVariable != null) builders[activeVariable] ?: managers[activeVariable]?.let { it to null } else null
         } ?: return null
 
-        val joins = collectJoins(expression)
+        val activeQueryVariable = if (inline == null) {
+            Regex("""\$(\w+)\s*->""").find(expression)?.groupValues?.get(1)
+        } else null
+        val joins = if (activeQueryVariable == null) {
+            collectJoins(expression)
+        } else {
+            val queryJoin = Regex("""\$\Q""" + activeQueryVariable + """\E\s*->\s*(?:join|leftJoin|innerJoin|rightJoin)\s*\(""")
+            queryJoin.findAll(before).flatMap { m ->
+                val end = before.indexOf(';', m.range.first).let { if (it < 0) before.length else it }
+                collectJoins(before.substring(m.range.first, end)).asSequence()
+            }.distinct().toList()
+        }
         val relationSourceAlias = if (role == "relation") {
             val first = parts.firstOrNull()?.trim()?.substringAfter(':')?.trim().orEmpty()
             Regex("""^(['"])([^'"]+)\1$""").matchEntire(first)?.groupValues?.get(2)
