@@ -25,7 +25,7 @@ final class CompletionService
     {
         $kind = $context['kind'] ?? '';
         if ($kind === 'manager') {
-            return $this->items(array_keys($index['managers'] ?? []), 'manager');
+            return $this->items(array_keys($index['managers']), 'manager');
         }
         if ($kind === 'parameter') {
             return $this->items($context['parameters'] ?? [], 'parameter');
@@ -59,7 +59,7 @@ final class CompletionService
             return $this->items(array_keys($aliases), 'alias');
         }
         $alias = $context['alias'] ?? $mainAlias;
-        if (!is_string($alias) || !isset($aliases[$alias])) {
+        if (!isset($aliases[$alias])) {
             return [];
         }
         $relatedEntity = $index['entities'][$aliases[$alias]];

@@ -177,7 +177,7 @@ final class PhpFileParser
         }
     }
 
-    /** @param array<int, mixed> $tokens
+    /** @param array<int, string|array{int,string,int}> $tokens
      * @return array{string, int} */
     private function readAttribute(array $tokens, int $from): array
     {
