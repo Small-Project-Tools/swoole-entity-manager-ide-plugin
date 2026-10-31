@@ -1,36 +1,91 @@
 package dev.smallproject.ide
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import java.io.File
 import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
+/**
+ * Regression coverage for the old CLI dependency: the PhpStorm indexer must
+ * operate on PHP source without installing or invoking PHP, Composer or sem-ide.
+ */
 class BundledCliTest {
-    @Test fun prefersProjectInstalledIndexer() {
-        val base = Files.createTempDirectory("ide-complete").toFile()
+    @Test
+    fun nativeIndexerWorksWithoutAnyPhpBinary() {
+        val root = Files.createTempDirectory("small-ide-php-free").toFile()
         try {
-            val local = File(base, "vendor/bin/sem-ide")
-            local.parentFile.mkdirs()
-            local.writeText("<?php")
-            val plugin = File(base, "plugin")
-            val jar = File(plugin, "lib/plugin.jar")
-            val embedded = File(plugin, "core/bin/sem-ide")
-            embedded.parentFile.mkdirs()
-            embedded.writeText("<?php")
-            assertEquals(local, SemIdeService.findCli(base, jar))
-        } finally { base.deleteRecursively() }
+            createProject(root)
+            val index = NativeProjectScanner.scan(root)
+            assertEquals("Demo\\Entity\\Person", index.managers["Demo\\EntityManager\\PersonManager"])
+            assertEquals(setOf("name"), index.entities.getValue("Demo\\Entity\\Person").fields)
+            assertEquals(listOf("name"), index.complete(
+                QueryContext(kind = "field", manager = "Demo\\EntityManager\\PersonManager", rootAlias = "person"),
+            ))
+        } finally {
+            root.deleteRecursively()
+        }
     }
 
-    @Test fun bundledIndexerWorksWithoutComposerDependency() {
-        val base = Files.createTempDirectory("ide-complete").toFile()
+    @Test
+    fun nativeIndexerNeverInvokesLegacyCliAndSkipsVendor() {
+        val root = Files.createTempDirectory("small-ide-php-free").toFile()
         try {
-            val jar = File(base, "plugin/lib/plugin.jar")
-            val embedded = File(base, "plugin/core/bin/sem-ide")
-            embedded.parentFile.mkdirs()
-            embedded.writeText("<?php")
-            assertEquals(embedded, SemIdeService.findCli(base, jar))
-            assertNull(SemIdeService.findCli(base, null))
-        } finally { base.deleteRecursively() }
+            createProject(root)
+            val marker = File(root, "marker")
+            for (name in listOf("bin/sem-ide", "vendor/bin/sem-ide")) {
+                val file = File(root, name)
+                file.parentFile.mkdirs()
+                file.writeText("#!/bin/sh\nprintf executed > '" + marker.absolutePath + "'\n")
+                file.setExecutable(true)
+            }
+            val vendorEntity = File(root, "vendor/foreign/Person.php")
+            vendorEntity.parentFile.mkdirs()
+            vendorEntity.writeText(
+                """
+                <?php
+                namespace Demo\Entity;
+                use Small\SwooleEntityManager\Entity\Attribute\{OrmEntity, Field};
+                #[OrmEntity]
+                class Person { #[Field] private int PLACEHOLDERvendorOnly; }
+                """.trimIndent().replace("PLACEHOLDER", "$"),
+            )
+
+            val index = NativeProjectScanner.scan(root)
+            assertFalse(marker.exists(), "Native indexing must not launch any CLI")
+            assertEquals(setOf("name"), index.entities.getValue("Demo\\Entity\\Person").fields)
+            assertTrue("vendorOnly" !in index.complete(
+                QueryContext(kind = "field", manager = "Demo\\EntityManager\\PersonManager", rootAlias = "person"),
+            ))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    private fun createProject(root: File) {
+        val entity = File(root, "src/Entity/Person.php")
+        entity.parentFile.mkdirs()
+        entity.writeText(
+            """
+            <?php
+            namespace Demo\Entity;
+            use Small\SwooleEntityManager\Entity\Attribute\{OrmEntity, Field};
+            #[OrmEntity]
+            class Person { #[Field] private string PLACEHOLDERname; }
+            """.trimIndent().replace("PLACEHOLDER", "$"),
+        )
+        val manager = File(root, "src/EntityManager/PersonManager.php")
+        manager.parentFile.mkdirs()
+        manager.writeText(
+            """
+            <?php
+            namespace Demo\EntityManager;
+            use Demo\Entity\Person;
+            use Small\SwooleEntityManager\EntityManager\Attribute\Entity;
+            #[Entity(Person::class)]
+            class PersonManager {}
+            """.trimIndent(),
+        )
     }
 }
