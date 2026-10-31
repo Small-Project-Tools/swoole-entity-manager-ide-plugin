@@ -40,9 +40,10 @@ phpstorm_build:
     - ls -lh build/distributions/*.zip
     - jar tf build/libs/*.jar | grep -F 'META-INF/plugin.xml'
     - jar tf build/libs/*.jar | grep -F 'dev/smallproject/ide/SmallCompletionContributor.class'
+    - jar tf build/libs/*.jar | grep -F 'dev/smallproject/ide/SmallPhpTypeProvider.class'
+    - jar tf build/libs/*.jar | grep -F 'dev/smallproject/ide/NativePhpIndexer.class'
     - jar tf build/distributions/*.zip | grep -F 'small-entity-manager/lib/'
-    - jar tf build/distributions/*.zip | grep -F 'small-entity-manager/core/bin/sem-ide'
-    - jar tf build/distributions/*.zip | grep -F 'small-entity-manager/core/src/Autoload.php'
+    - '! jar tf build/distributions/*.zip | grep -F "core/bin/sem-ide"'
   artifacts:
     when: always
     paths:

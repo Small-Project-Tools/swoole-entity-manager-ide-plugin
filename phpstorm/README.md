@@ -2,82 +2,61 @@
 
 ![Small Entity Manager PhpStorm plugin](assets/plugin-logo.png)
 
-The plugin icon uses the supplied Small Entity Manager artwork; its SVG is bundled as `META-INF/pluginIcon.svg` for the JetBrains Plugins interface.
+Native PhpStorm 2025.1+ plugin for Small Swoole Entity Manager Core 3 and its Symfony Bundle. Unlike the shared PHP CLI engine, **the PhpStorm plugin does not require PHP, Composer, a configured PHP interpreter or a running application**. It reads source files statically in the background and does not execute application PHP.
 
-A native IntelliJ Platform plugin for PhpStorm 2025.1+.
-The JAR is compiled against official, individually published JetBrains IntelliJ Platform 2025.1 API modules (build 251.23774.435), not a downloaded IDE installer.
-The `plugin.xml` declares a mandatory dependency on `com.jetbrains.php`; the plugin is intended for PhpStorm and other IDEs with that plugin installed.
+## Features
 
-## Supported completions
+- Completion dropdown inside query string arguments: mapped entity fields, relations, join aliases, scalar projections, named parameters.
+- Completion of manager-class references in a factory call: start typing \`$factory->get(Us\` and press **Ctrl+Space** to insert a qualified \`Manager::class\`.
+- Type inference through PhpStorm's **PhpTypeProvider4**, including \`$factory->get(UserManager::class)\` and the relevant Small query-builder, join and condition types.
+- Imported and aliased class names, grouped imports, local traits, ancestor entity properties, fluent calls, named arguments and stored query builders.
+- Native bounded indexing: skips vendor, node_modules, build outputs and generated directories, limits files to 2 MiB and 10,000 source files, caches results and completes asynchronously.
+- No PHP process, shell command, Composer autoload or SQL connection is invoked.
 
-- Query fields in `getFieldForCondition()`, `addOrderBy()` and `addFieldToUpdate()`.
-- Relations and aliases in `join()`, `innerJoin()`, `leftJoin()` and `rightJoin()`.
-- Previously referenced named placeholders in `setParameter()`.
-- Basic manager resolution via `$factory->get(YourManager::class)`, import aliases and `@var` documentation.
-- The PHP CLI `sem-ide complete` supplies candidate names using the shared metadata index.
+## Installation
 
-## Requirements
+In PhpStorm: **Settings → Plugins → gear icon → Install Plugin from Disk**. Select the plugin ZIP from the \`phpstorm_build\` CI artifact or the GitLab release.
 
-- PhpStorm 2025.1 or newer, with its bundled PHP plugin enabled.
-- PHP CLI on the PATH.
-- No Composer installation of the engine is required: the ZIP bundles the offline `sem-ide` CLI. A project-local `vendor/bin/sem-ide` takes precedence.
-- JDK 21 and Gradle 9.2.1 for building.
+No PHP installation on Windows is required for these completion and inference features. Normal PhpStorm PHP debugging, PHPUnit and code execution still need a configured interpreter as usual.
 
-## Build and installation
+## Build
 
-```sh
+\`\`\`sh
 cd phpstorm
-gradle clean test buildPlugin --no-daemon
-```
+gradle --no-daemon test buildPlugin
+\`\`\`
 
-The installable artifact is `build/distributions/small-entity-manager-phpstorm-<version>.zip`. Tagged CI pipelines use the Git tag as the version; local and branch builds default to `0.2.5-dev-1`, newer than the last tagged release `0.2.4`.
-In PhpStorm: **Settings → Plugins → gear icon → Install Plugin from Disk**, then select the ZIP.
+Uses Gradle 9.2.1, JDK 21 and the official PhpStorm 2025.1.3 SDK with its bundled PHP plugin. JetBrains' runtime PHP PSI APIs are provided by PhpStorm and are **not** packaged inside our plugin.
 
-The Gradle build downloads small official JetBrains API JARs and creates the standard IntelliJ plugin ZIP layout (`small-entity-manager/lib/*.jar`).
-The plugin manifest is embedded in that JAR and includes the version and minimum IDE build.
+Output: \`build/distributions/small-entity-manager-phpstorm-<version>.zip\`.
 
-## Validation
+Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-2\`.
 
-The Kotlin/JUnit tests and plugin ZIP build run on every GitLab commit.
-The offline PHP indexing engine has separate Pest and PHPStan quality gates.
-The plugin has not yet been tested by launching an actual PhpStorm instance or by JetBrains Plugin Verifier; these remain release requirements.
+## Query example
 
-## Known limitations
+\`\`\`php
+use Demo\EntityManager\UserManager;
 
-- Parsing is conservative and text-based rather than full PHP PSI; complex fluent expressions may not resolve.
-- No factory return-type provider, PHP PSI navigation, or hover documentation yet.
-- The Kotlin adapter uses a short cache and synchronous CLI calls; future improvements should use background execution.
-- When no manager or relationship is resolved, no speculative candidates are produced.
+/** @var \Small\SwooleEntityManager\Factory\EntityManagerFactory $factory */
+$manager = $factory->get(UserManager::class);
+$query = $manager->createQueryBuilder('user');
+$query->leftJoin('user', 'company', 'owner')->endJoin();
+$query->getFieldForCondition(''); // Ctrl+Space: id, email, companyId, createdAt
+$query->getFieldForCondition('name', 'owner');
+\`\`\`
 
-## Completion and method signatures
+**Signatures matter:** Core 3 factory uses \`get(string $manager, bool $new = false)\` whereas Symfony Bundle factory uses \`get(string $managerClass, bool $new = false)\`. Prefer positional \`get(UserManager::class)\` if the same source is intended for both. The plugin understands \`manager:\` and \`managerClass:\`, but it does not change those PHP signatures.
 
-Use **Ctrl+Space** inside a supported string argument to open the completion dropdown.
-The plugin now resolves named factory arguments (`managerClass:`), imported manager
-classes, query builders stored in variables, and multiline fluent chains with joins.
-It matches the full typed string prefix (including dots in projections).
-Completions include entity fields, relation names, existing aliases, projections
-and parameter placeholders. The PHP CLI is bundled in the plugin ZIP.
+For conditions, the correct first argument to \`firstCondition()\` may be a \`ConditionField\` from \`getFieldForCondition()\`; the second argument is a \`ConditionOperatorType\` value. The plugin does not inject false field names directly into \`firstCondition()\` string arguments.
 
-Relevant public Core 3 signatures:
-- `createQueryBuilder(?string $alias = null): QueryBuilder`
-- `leftJoin(string $fromAlias, string $relationAlias, ?string $alias = null): LeftJoinBuilder`
-- `endJoin(): QueryBuilder`
-- `getFieldForCondition(string $fieldName, ?string $entityAlias = null): ConditionField`
-- `where(): Bracket`
-- `firstCondition(string|int|QueryBuilder|ConditionField $var1, ConditionOperatorType $operator, ...): Bracket`
+## Tests / stability
 
-**Important:** `firstCondition(var1: 'person.deletedAt IS NULL')` is not an ORM
-field expression and is missing the mandatory `operator` argument. Use
-`$query->getFieldForCondition('deletedAt', 'person')` as `var1` and
-`ConditionOperatorType::isNull` as `operator`. PhpStorm itself provides
-parameter information for these method signatures; the plugin complements
-it with entity-aware literal suggestions.
+Kotlin unit and regression tests exercise native indexing from the PHP fixture files, manager resolution, join aliases, type inference, and avoidance of unrelated factory calls. GitLab builds the plugin with the **real** JetBrains PHP API.
 
-The resolver remains conservative; arbitrary dynamically computed manager
-classes and dynamic relation aliases are not inferred.
+The completion contributor is non-blocking; the initial Ctrl+Space invocation may schedule the scan, then reopen completion when data is available. On installations with automatic popups disabled, invoke Ctrl+Space a second time.
 
-## Stability and firstCondition completion
+This is conservative static source analysis. Files with unsupported dynamic attributes or runtime-computed class names may not yield completions; completion results are refreshed after about 30 seconds.
 
-Completion runs the PHP metadata indexer on a single background worker, never under the editor read action. Results are cached for two minutes and the dropdown is retriggered when the first background scan finishes. If auto-popup is disabled in PhpStorm, press Ctrl+Space again after the initial scan. Timeouts and process output are bounded; malformed or too-large PHP files cause the plugin to return no suggestions rather than block the IDE. The plugin does not override native PhpStorm completion of the `ConditionOperatorType` enum in `firstCondition()`.
+## Deployment status
 
-The bundled PHP indexer is started with a 256 MB PHP memory limit to prevent a runaway completion scan from exhausting the developer machine's memory.
+Passing Kotlin tests and successful plugin packaging verify bytecode compilation against the official SDK; they **do not** replace a runtime smoke test on an actual Windows PhpStorm instance. Test installation and real-editor completion before publishing a stable release.

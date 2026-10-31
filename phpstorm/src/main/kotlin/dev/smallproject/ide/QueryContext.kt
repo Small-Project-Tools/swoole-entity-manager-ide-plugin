@@ -15,7 +15,7 @@ object QueryContextResolver {
     const val MAX_SOURCE_LENGTH = 256 * 1024
     private val imports = Regex("""(?m)^\s*use\s+([\\\w]+)(?:\s+as\s+(\w+))?\s*;""")
     private val namespace = Regex("""\bnamespace\s+([\\\w]+)\s*;""")
-    private val factory = Regex("""\$(\w+)\s*=\s*[^;]*?->\s*get\s*\(\s*(?:managerClass\s*:\s*)?([\\\w]+)::class""")
+    private val factory = Regex("""\$(\w+)\s*=\s*[^;]*?->\s*get\s*\(\s*(?:(?:managerClass|manager)\s*:\s*)?([\\\w]+)::class""")
     private val annotated = Regex("""@var\s+([\\\w]+Manager)\s+\$(\w+)""")
     private val builder = Regex("""\$(\w+)\s*=\s*\$(\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
     private val directBuilder = Regex("""\$(\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
@@ -32,6 +32,14 @@ object QueryContextResolver {
         val named = Regex("""^(\w+)\s*:\s*(.*)$""", RegexOption.DOT_MATCHES_ALL).matchEntire(current)
         val role = methodArgumentRole(call.method, named?.groupValues?.get(1), parts.size - 1) ?: return null
         val literal = named?.groupValues?.get(2) ?: current
+        if (role == "manager") {
+            val typed = literal.trimStart()
+            val receiver = sourceBeforeCaret.substring(maxOf(0, call.open - 160), call.open)
+            if (!Regex("""(?i)\bfactory\s*->\s*get\s*$""").containsMatchIn(receiver) &&
+                !Regex("""(?i)\w*factory\s*->\s*get\s*$""").containsMatchIn(receiver)) return null
+            if (!Regex("""^[\\\w]*$""").matches(typed)) return null
+            return QueryContext(kind = "manager", typedPrefix = typed.substringAfterLast('\\'))
+        }
         val quote = literal.trimStart().firstOrNull()
         if (quote != '\'' && quote != '"') return null
         val typed = literal.trimStart().drop(1)
@@ -97,6 +105,7 @@ object QueryContextResolver {
     /** Argument names/positions correspond to the Core 3 method signatures. */
     internal fun methodArgumentRole(method: String, named: String?, index: Int): String? {
         val signature = when (method) {
+            "get" -> listOf("managerClass" to "manager", "new" to "")
             "getFieldForCondition" -> listOf("fieldName" to "field", "entityAlias" to "alias")
             "addOrderBy" -> listOf("fieldName" to "field", "entityAlias" to "alias", "sens" to "")
             "addFieldToUpdate" -> listOf("field" to "field", "update" to "")

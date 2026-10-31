@@ -1,12 +1,8 @@
 package dev.smallproject.ide
 
-import java.io.File
-import java.nio.file.Files
-import java.util.concurrent.TimeUnit
 
 /** Runs the offline PHP indexer outside the IDE read action with bounded time and output. */
 object SemIdeClient {
-    private const val MAX_OUTPUT_BYTES = 512 * 1024
     private val labelPattern = Regex(""""label"\s*:\s*"((?:\\.|[^"\\])*)"""")
 
     fun encodeRequest(context: QueryContext): String = buildString {
@@ -35,32 +31,6 @@ object SemIdeClient {
     fun parseLabels(json: String): List<String> {
         if (!json.trimStart().startsWith("[")) return emptyList()
         return labelPattern.findAll(json).map { m -> unescape(m.groupValues[1]) }.toList()
-    }
-
-    fun complete(root: File, binary: File, context: QueryContext, timeoutMs: Long = 5000): List<String> {
-        if (!root.isDirectory || !binary.isFile) return emptyList()
-        val output = Files.createTempFile("small-ide-", ".json")
-        try {
-            val process = ProcessBuilder("php", "-d", "memory_limit=256M", binary.absolutePath, "complete", root.absolutePath, encodeRequest(context))
-                .directory(root)
-                .redirectOutput(output.toFile())
-                .redirectError(ProcessBuilder.Redirect.DISCARD)
-                .start()
-            if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
-                process.destroyForcibly()
-                process.waitFor(200, TimeUnit.MILLISECONDS)
-                return emptyList()
-            }
-            if (process.exitValue() != 0 || Files.size(output) > MAX_OUTPUT_BYTES) return emptyList()
-            return parseLabels(Files.readString(output, Charsets.UTF_8))
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-            return emptyList()
-        } catch (_: Exception) {
-            return emptyList()
-        } finally {
-            Files.deleteIfExists(output)
-        }
     }
 
     private fun escape(value: String) = buildString {

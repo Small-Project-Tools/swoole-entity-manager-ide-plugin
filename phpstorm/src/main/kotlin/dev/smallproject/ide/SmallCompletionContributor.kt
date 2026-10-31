@@ -22,7 +22,10 @@ class SmallCompletionContributor : CompletionContributor() {
         val completion = result.withPrefixMatcher(context.typedPrefix)
         for (name in SemIdeService.complete(project, parameters.editor, context)) {
             ProgressManager.checkCanceled()
-            completion.addElement(LookupElementBuilder.create(name).withTypeText("Small ORM / " + context.kind, true))
+            val item = LookupElementBuilder.create(name).withTypeText("Small ORM / " + context.kind, true)
+            completion.addElement(if (context.kind == "manager") {
+                item.withLookupString(name.substringAfterLast('\\').removeSuffix("::class"))
+            } else item)
         }
     }
 }

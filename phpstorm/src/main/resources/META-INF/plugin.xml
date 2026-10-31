@@ -1,13 +1,16 @@
 <idea-plugin>
   <id>dev.smallproject.entitymanager</id>
   <name>Small Entity Manager</name>
-  <version>${pluginVersion}</version>
+  <version>0.2.5-dev-2</version>
   <idea-version since-build="251"/>
-  <vendor url="https://git.small-project.dev/pub/small-entity-manager-ide-core">Small Project</vendor>
-  <description><![CDATA[Completion of Small Swoole Entity Manager fields, relations, aliases, and manager factory classes. Requires the sem-ide CLI in the project.]]></description>
+  <vendor url="https://git.small-project.dev/pub/ide/small-entity-manager-ide-core">Small Project</vendor>
+  <description><![CDATA[Native PHP-free completion and PhpStorm type inference for Small Swoole Entity Manager fields, relations, aliases, and manager factories.]]></description>
   <depends>com.intellij.modules.platform</depends>
   <depends>com.jetbrains.php</depends>
   <extensions defaultExtensionNs="com.intellij">
     <completion.contributor language="PHP" implementationClass="dev.smallproject.ide.SmallCompletionContributor"/>
+  </extensions>
+  <extensions defaultExtensionNs="com.jetbrains">
+    <php.typeProvider4 implementation="dev.smallproject.ide.SmallPhpTypeProvider"/>
   </extensions>
 </idea-plugin>

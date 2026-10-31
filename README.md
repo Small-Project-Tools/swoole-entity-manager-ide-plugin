@@ -2,7 +2,7 @@
 
 ![Small Entity Manager PhpStorm plugin](phpstorm/assets/plugin-logo.png)
 
-Static, read-only project metadata for **Small Swoole Entity Manager Core 3** and the compatible **Symfony Bundle 2**. This repository contains the common engine shared by the VS Code and PhpStorm integrations. The initial **PhpStorm plugin** is in [phpstorm/](phpstorm/); the VS Code adapter is not yet implemented.
+Static, read-only project metadata for **Small Swoole Entity Manager Core 3** and the compatible **Symfony Bundle 2**. This repository contains the common engine shared by the VS Code and PhpStorm integrations. The **PhpStorm plugin** in [phpstorm/](phpstorm/) now indexes PHP natively without requiring a local interpreter; the PHP CLI here is retained for other IDE adapters. The VS Code adapter is not yet implemented.
 
 ## Features
 
@@ -82,7 +82,7 @@ The `gitlab_release` job publishes both download links in **Deploy → Releases*
 
 Create a tag with `bin/release --dev|--patch|--minor|--major`, or push a tag yourself.
 The version embedded in the PhpStorm plugin matches `CI_COMMIT_TAG` on tagged builds.
-Branch builds use development version `0.2.5-dev-1` until the next tag.
+Branch builds use development version `0.2.5-dev-2` until the next tag.
 
 See [docs/releases.md](docs/releases.md).
 
