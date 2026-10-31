@@ -36,22 +36,10 @@ class QueryContextTest {
     }
     @Test fun parameters() {
         val context = QueryContextResolver.resolve("""
-            ${' { assertNull(QueryContextResolver.resolve("unknown('")) }
-}
-}manager = ${' { assertNull(QueryContextResolver.resolve("unknown('")) }
-}
-}factory->get(UserManager::class);
-            ${' { assertNull(QueryContextResolver.resolve("unknown('")) }
-}
-}query = ${' { assertNull(QueryContextResolver.resolve("unknown('")) }
-}
-}manager->createQueryBuilder('user');
-            ${' { assertNull(QueryContextResolver.resolve("unknown('")) }
-}
-}query->where()->firstCondition('enabled', '=', ':enabled');
-            ${' { assertNull(QueryContextResolver.resolve("unknown('")) }
-}
-}query->setParameter('
+            ${'$'}manager = ${'$'}factory->get(UserManager::class);
+            ${'$'}query = ${'$'}manager->createQueryBuilder('user');
+            ${'$'}query->where()->firstCondition('enabled', '=', ':enabled');
+            ${'$'}query->setParameter('
         """.trimIndent())
         assertEquals("parameter", context?.kind)
         assertEquals(listOf("enabled"), context?.parameters)
