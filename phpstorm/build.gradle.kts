@@ -15,7 +15,9 @@ dependencies {
     intellijPlatform {
         // Only shared IntelliJ Platform APIs are used by this extension.
         // The PHP plugin is required at runtime via plugin.xml.
-        intellijIdeaCommunity("2025.1")
+        // Multi-OS archive excludes the bundled JetBrains Runtime and is
+        // smaller to unpack in disk-constrained GitLab runners.
+        intellijIdeaCommunity("2025.1") { useInstaller = false }
     }
     // All current tests target pure Kotlin code: no IDE test harness required.
     testImplementation(kotlin("test-junit5"))

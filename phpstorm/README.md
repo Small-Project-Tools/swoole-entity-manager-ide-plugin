@@ -26,3 +26,5 @@ framework. GitLab serializes heavy PhpStorm builds and retries one runner system
 failure; actual compiler/test failures are never retried or ignored.
 
 The IntelliJ Community build target reduces SDK size but does not independently verify PhpStorm runtime compatibility. Run Plugin Verifier or install in PhpStorm before publishing a release.
+
+The compile target uses JetBrains' multi-OS IDEA Community archive (`useInstaller = false`), which omits the bundled JBR and reduces extraction pressure. This is intended for compilation and ZIP packaging, not running the IDE or validating the plugin inside PhpStorm.
