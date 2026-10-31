@@ -19,6 +19,24 @@ quality:
   rules:
     - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
 
+phpstorm_build:
+  image: gradle:9.2.1-jdk21
+  stage: quality
+  before_script: []
+  variables:
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-user-home"
+  script:
+    - cd phpstorm
+    - gradle test buildPlugin --no-daemon --console=plain
+  artifacts:
+    when: always
+    paths:
+      - phpstorm/build/distributions/*.zip
+      - phpstorm/build/test-results/test/
+    expire_in: 7 days
+  rules:
+    - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
+
 tests:
   stage: tests
   script:

@@ -12,4 +12,6 @@ Requirements: PhpStorm 2025.1+, JDK 21 for the build, `php` on PATH, and `vendor
 
 Build: `./gradlew buildPlugin` (or `gradle buildPlugin`). Artifact: `build/distributions/*.zip`.
 
-Limitations: the first pass recognizes simple PHP assignments and literal query aliases. Complex fluent expressions, parameter extraction, contextual documentation, type inference for factory returns and PHP PSI navigation are not implemented yet. The plugin deliberately returns no candidates for unresolved contexts.
+Limitations: conservative text-based analysis (not full PHP PSI). Complex fluent expressions, contextual hover documentation, factory return-type inference and PSI navigation are not yet implemented. Named parameter completions are derived from previously seen placeholders. The plugin deliberately returns no candidates for unresolved contexts.
+
+The CLI integration now uses a testable SemIdeClient and a 3-second cache for repeated requests. The CI job phpstorm_build compiles and packages the plugin on every commit, and publishes its ZIP as a build artifact when successful.
