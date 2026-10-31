@@ -18,7 +18,8 @@ dependencies {
     }
     // All current tests target pure Kotlin code: no IDE test harness required.
     testImplementation(kotlin("test-junit5"))
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
 }
 
 kotlin { jvmToolchain(21) }
