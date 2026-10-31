@@ -12,6 +12,9 @@ dependencies {
   compileOnly("com.jetbrains.intellij.platform:util:251.23774.435") { isTransitive = false }
   compileOnly("com.jetbrains.intellij.platform:extensions:251.23774.435") { isTransitive = false }
   compileOnly("com.jetbrains.intellij.platform:analysis:251.23774.435") { isTransitive = false }
+  compileOnly("com.jetbrains.intellij.platform:editor:251.23774.435") { isTransitive = false }
+  compileOnly("com.jetbrains.intellij.platform:analysis-impl:251.23774.435") { isTransitive = false }
+  compileOnly("com.jetbrains.intellij.platform:editor-ui:251.23774.435") { isTransitive = false }
   testImplementation(kotlin("test-junit5"))
   testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
