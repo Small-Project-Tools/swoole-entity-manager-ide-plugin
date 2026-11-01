@@ -74,9 +74,16 @@ object QueryContextResolver {
         for (m in typedManagerProperty.findAll(before)) managers["this->" + m.groupValues[2]] = fqcn(m.groupValues[1])
         for (m in factory.findAll(before)) managers[m.groupValues[1]] = fqcn(m.groupValues[2])
         val builders = mutableMapOf<String, Pair<String, String?>>()
+        val builderAssignments = mutableMapOf<String, Int>()
+        val builderJoins = mutableMapOf<String, List<Map<String, String>>>()
         for (m in builder.findAll(before)) {
             val manager = managers[m.groupValues[2]] ?: continue
-            builders[m.groupValues[1]] = manager to builderAlias(before, m.range.last + 1)
+            val variable = m.groupValues[1]
+            builders[variable] = manager to builderAlias(before, m.range.last + 1)
+            builderAssignments[variable] = m.range.first
+            // Joins chained during assignment belong to this builder and remain available later.
+            val end = before.indexOf(';', m.range.last).let { if (it < 0) before.length else it }
+            builderJoins[variable] = collectJoins(before.substring(m.range.first, end))
         }
         val start = maxOf(before.lastIndexOf(';'), before.lastIndexOf('{'), before.lastIndexOf('}')) + 1
         val expression = before.substring(start)
@@ -101,11 +108,14 @@ object QueryContextResolver {
         val joins = if (activeQueryVariable == null) {
             collectJoins(expression)
         } else {
-            val queryJoin = Regex("""\$\Q""" + activeQueryVariable + """\E\s*->\s*(?:join|leftJoin|innerJoin|rightJoin)\s*\(""")
-            queryJoin.findAll(before).flatMap { m ->
+            val variable = activeQueryVariable
+            val assignmentStart = builderAssignments[variable] ?: 0
+            val queryJoin = Regex("""\$\Q""" + variable + """\E\s*->\s*(?:join|leftJoin|innerJoin|rightJoin)\s*\(""")
+            val mutations = queryJoin.findAll(before).filter { it.range.first >= assignmentStart }.flatMap { m ->
                 val end = before.indexOf(';', m.range.first).let { if (it < 0) before.length else it }
                 collectJoins(before.substring(m.range.first, end)).asSequence()
-            }.distinct().toList()
+            }.toList()
+            (builderJoins[variable].orEmpty() + mutations).distinct()
         }
         val relationSourceAlias = if (role == "relation") {
             val first = parts.firstOrNull()?.trim()?.substringAfter(':')?.trim().orEmpty()

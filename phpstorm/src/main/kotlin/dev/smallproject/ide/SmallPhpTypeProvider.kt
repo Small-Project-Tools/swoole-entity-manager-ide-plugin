@@ -18,21 +18,15 @@ class SmallPhpTypeProvider : PhpTypeProvider4 {
     override fun getType(element: PsiElement): PhpType? {
         val reference = element as? MethodReference ?: return null
         val name = reference.name ?: return null
-        if (name != "get" && name !in setOf(
-                "createQueryBuilder", "createScallarQueryBuilder", "createStatsQueryBuilder",
-                "createUpdateBuilder", "createDeleteBuilder", "getFieldForCondition", "where",
-                "join", "leftJoin", "rightJoin", "innerJoin", "endWhere", "endJoin",
-                "firstCondition", "andCondition", "orCondition", "xorCondition",
-            )) return null
+        // Other Small methods have native PHP return type declarations.
+        // Claiming them by a file-wide heuristic polluted unrelated method inference.
+        if (name != "get") return null
         val file = element.containingFile ?: return null
         val source = file.text
         val offset = element.textOffset
-        val fqcn = if (name == "get") {
-            val argument = reference.parameters.firstOrNull()?.text ?: return null
-            SemTypeInference.factoryResult(source, offset, argument)
-        } else {
-            SemTypeInference.builderResult(name, source, offset)
-        } ?: return null
+        val argument = reference.parameters.firstOrNull()?.text ?: return null
+        val receiver = reference.classReference?.text ?: return null
+        val fqcn = SemTypeInference.factoryResult(source, offset, argument, receiver) ?: return null
         return PhpType().add(fqcn)
     }
 

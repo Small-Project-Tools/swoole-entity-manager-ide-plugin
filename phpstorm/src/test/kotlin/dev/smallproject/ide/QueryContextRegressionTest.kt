@@ -62,4 +62,23 @@ class QueryContextRegressionTest {
         """.trimIndent()))
         assertEquals("condition-field", QueryContextResolver.methodArgumentRole("firstCondition", "var1", 0))
     }
+
+    @Test fun fluentJoinsMadeDuringBuilderAssignmentAreAvailableLater() {
+        val source = """
+            <?php
+            namespace Sample;
+            use Demo\EntityManager\UserManager;
+            ${'$'}manager = ${'$'}factory->get(UserManager::class);
+            ${'$'}query = ${'$'}manager->createQueryBuilder(alias: 'user')
+                ->leftJoin(fromAlias: 'user', relationAlias: 'company', alias: 'owner')->endJoin();
+            ${'$'}query->where()->firstCondition(${'$'}query->getFieldForCondition('
+        """.trimIndent()
+        val context = QueryContextResolver.resolve(source)
+        assertEquals("field", context?.kind)
+        assertEquals("Demo\\EntityManager\\UserManager", context?.manager)
+        assertEquals("user", context?.rootAlias)
+        assertEquals("company", context?.joins?.single()?.get("relation"))
+        assertEquals("owner", context?.joins?.single()?.get("alias"))
+    }
+
 }

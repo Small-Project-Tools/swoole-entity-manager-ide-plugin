@@ -10,6 +10,10 @@ object SemIdeClient {
         context.manager?.let { append(",\"manager\":\"").append(escape(it)).append('"') }
         context.rootAlias?.let { append(",\"rootAlias\":\"").append(escape(it)).append('"') }
         context.alias?.let { append(",\"alias\":\"").append(escape(it)).append('"') }
+        if (context.kind == "field" && '.' in context.typedPrefix) {
+            append(",\"qualifiedAlias\":\"")
+                .append(escape(context.typedPrefix.substringBefore('.'))).append('"')
+        }
         context.queryReference?.let { append(",\"queryReference\":\"").append(escape(it)).append('"') }
         context.operatorReference?.let { append(",\"operatorReference\":\"").append(escape(it)).append('"') }
         append(",\"joins\":[")

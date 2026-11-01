@@ -1,44 +1,31 @@
 package dev.smallproject.ide
 
 /**
- * Type conclusions depend only on the current PHP file and the method arguments.
- * This is safe during PhpStorm indexing (no PhpIndex or other global indices).
+ * Dynamic factory return inference only. Methods such as where(), leftJoin()
+ * and getFieldForCondition() already declare accurate return types in Core 3.
+ * Never override those types based on unrelated factory calls in the file.
  */
 internal object SemTypeInference {
-    private const val QUERY = "Small\\SwooleEntityManager\\QueryBuilder\\RelationalQueryBuilder\\"
-    private val builderTypes = mapOf(
-        "createQueryBuilder" to "QueryBuilder",
-        "createScallarQueryBuilder" to "ScallarRelationalQueryBuilder",
-        "createStatsQueryBuilder" to "StatsQueryBuilder",
-        "createUpdateBuilder" to "UpdateBuilder",
-        "createDeleteBuilder" to "DeleteBuilder",
-        "getFieldForCondition" to "Bean\\ConditionField",
-        "where" to "Bean\\Bracket",
-        "join" to "Bean\\JoinBuilder",
-        "leftJoin" to "Bean\\LeftJoinBuilder",
-        "rightJoin" to "Bean\\RightJoinBuilder",
-        "innerJoin" to "Bean\\InnerJoinBuilder",
-        "endWhere" to "QueryBuilder",
-        "endJoin" to "QueryBuilder",
-        "firstCondition" to "Bean\\Bracket",
-        "andCondition" to "Bean\\Bracket",
-        "orCondition" to "Bean\\Bracket",
-        "xorCondition" to "Bean\\Bracket",
-    )
     private val classReference = Regex("""^\s*(?:(?:managerClass|manager)\s*:\s*)?([\\\w]+)\s*::\s*class\s*$""")
+    private val variable = Regex("""^\$(?:(?:this)->)?([A-Za-z_]\w*)$""")
+    private val typedFactory = Regex(
+        """\b(?:[\\\w]*EntityManagerFactory|[\\\w]*ManagerFactory)\s+\$(\w+)""",
+    )
 
-    fun factoryResult(source: String, offset: Int, firstArgument: String): String? {
-        val raw = classReference.matchEntire(firstArgument)?.groupValues?.get(1) ?: return null
+    fun factoryResult(source: String, offset: Int, argument: String, receiver: String): String? {
+        if (source.length > QueryContextResolver.MAX_SOURCE_LENGTH || offset !in 0..source.length) return null
+        val match = classReference.matchEntire(argument) ?: return null
+        val raw = match.groupValues[1]
         if (!raw.substringAfterLast('\\').endsWith("Manager")) return null
+        if (!isFactoryReceiver(receiver, source.take(offset))) return null
         return PhpNameResolver.fromSource(source, offset, raw)?.let { "\\$it" }
     }
 
-    fun builderResult(method: String, source: String, offset: Int): String? {
-        val name = builderTypes[method] ?: return null
-        val before = source.take(offset.coerceIn(0, source.length))
-        // Do not claim arbitrary third-party methods with matching names.
-        if (!before.contains(Regex("""->\s*get\s*\(\s*(?:(?:managerClass|manager)\s*:\s*)?[\\\w]+Manager::class"""))
-            && !before.contains(Regex("""@var\s+[\\\w]*Manager\s+\$\w+"""))) return null
-        return "\\$QUERY$name"
+    private fun isFactoryReceiver(receiver: String, before: String): Boolean {
+        val name = variable.matchEntire(receiver.trim())?.groupValues?.get(1) ?: return false
+        // A typed factory can have any property or variable name.
+        if (typedFactory.findAll(before).any { it.groupValues[1] == name }) return true
+        // Common explicit factory names; do not intercept unrelated get() calls.
+        return name.endsWith("Factory", ignoreCase = true)
     }
 }

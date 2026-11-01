@@ -43,4 +43,37 @@ class NativePhpIndexerTest {
             alias = "bad", joins = listOf(mapOf("fromAlias" to "u", "relation" to "unknown", "alias" to "bad")))
         assertTrue(index.complete(invalid).isEmpty())
     }
+
+    @Test fun qualifiedFieldLookupOffersValidAliasLabels() {
+        val index = NativeProjectScanner.scan(root)
+        val context = QueryContext(
+            "field", "Demo\\EntityManager\\UserManager", "user",
+            joins = listOf(mapOf("fromAlias" to "user", "relation" to "company", "alias" to "owner")),
+            typedPrefix = "owner.n",
+        )
+        assertEquals(listOf("owner.name"), index.complete(context))
+        assertEquals(listOf("user.email"), index.complete(context.copy(typedPrefix = "user.em")))
+    }
+
+    @Test fun managerMappingIsAuthoritativeEvenWithoutAnEntityMarker() {
+        val files = mapOf(
+            "Legacy.php" to """
+                <?php
+                namespace Generic;
+                use Small\SwooleEntityManager\Entity\Attribute\Field;
+                class Legacy { #[Field] private string ${'$'}name; }
+            """.trimIndent().replace("Small\\\\", "Small\\"),
+            "LegacyManager.php" to """
+                <?php
+                namespace Generic;
+                use Small\SwooleEntityManager\EntityManager\Attribute\Entity;
+                #[Entity(Legacy::class)]
+                class LegacyManager {}
+            """.trimIndent().replace("Small\\\\", "Small\\"),
+        )
+        val index = NativePhpIndexer.index(files)
+        assertEquals(setOf("name"), index.entities.getValue("Generic\\Legacy").fields)
+        assertEquals("Generic\\Legacy", index.managers["Generic\\LegacyManager"])
+    }
+
 }

@@ -23,6 +23,10 @@ object SemIdeService {
     private const val INDEX_TTL_MS = 30_000L
 
     fun complete(project: Project, editor: Editor, context: QueryContext): List<String> {
+        // Enum cases and already-known parameter names require no project scan.
+        if (context.kind == "condition-operator" || context.kind == "parameter") {
+            return NativeProjectIndex(emptyMap(), emptyMap()).complete(context)
+        }
         val root = project.basePath?.let(::File) ?: return emptyList()
         // The time bucket expires completed suggestions even if the project is not otherwise edited.
         val key = root.absolutePath + "\u0000" + (System.currentTimeMillis() / INDEX_TTL_MS) +

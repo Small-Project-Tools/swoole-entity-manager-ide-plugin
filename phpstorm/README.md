@@ -33,7 +33,7 @@ Uses Gradle 9.2.1, JDK 21 and the official PhpStorm 2025.1.3 SDK with its bundle
 
 Output: \`build/distributions/small-entity-manager-phpstorm-<version>.zip\`.
 
-Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-4\`.
+Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-5\`.
 
 ## Query example
 
@@ -69,3 +69,7 @@ This is conservative static source analysis. Files with unsupported dynamic attr
 ## Deployment status
 
 Passing Kotlin tests and successful plugin packaging verify bytecode compilation against the official SDK; they **do not** replace a runtime smoke test on an actual Windows PhpStorm instance. Test installation and real-editor completion before publishing a stable release.
+
+## Diagnose missing completions
+
+In PhpStorm use **Tools → Small Entity Manager: Diagnose Completion** while the caret is inside `getFieldForCondition()` or `firstCondition()`. The local diagnostics show the number of indexed managers and entities, the resolved query and alias, and the number of completion candidates; no source code is sent externally.

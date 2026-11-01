@@ -9,27 +9,34 @@ class SemTypeInferenceTest {
     @Test fun returnsImportedManagerFromClassString() {
         val source = "<?php\nnamespace App;\nuse Demo\\EntityManager\\UserManager as MemberManager;\n"
         assertEquals("\\Demo\\EntityManager\\UserManager",
-            SemTypeInference.factoryResult(source, source.length, "managerClass: MemberManager::class"))
+            SemTypeInference.factoryResult(source, source.length, "managerClass: MemberManager::class", "$" + "factory"))
         assertEquals("\\Demo\\EntityManager\\UserManager",
-            SemTypeInference.factoryResult(source, source.length, "MemberManager::class"))
+            SemTypeInference.factoryResult(source, source.length, "MemberManager::class", "$" + "factory"))
     }
 
     @Test fun returnsQualifiedManager() {
         val source = "<?php\nnamespace App;\n"
         assertEquals("\\Demo\\EntityManager\\UserManager",
-            SemTypeInference.factoryResult(source, source.length, "\\Demo\\EntityManager\\UserManager::class"))
-        assertNull(SemTypeInference.factoryResult(source, source.length, "Unrelated::class"))
+            SemTypeInference.factoryResult(source, source.length, "\\Demo\\EntityManager\\UserManager::class", "$" + "factory"))
+        assertNull(SemTypeInference.factoryResult(source, source.length, "Unrelated::class", "$" + "factory"))
     }
 
-    @Test fun returnsBuilderAndConditionTypesOnlyAfterFactoryUsage() {
-        val source = "<?php\n" + "\$manager = \$factory->get(UserManager::class);\n" +
-            "\$builder = \$manager->createQueryBuilder('user');\n"
-        assertEquals("\\Small\\SwooleEntityManager\\QueryBuilder\\RelationalQueryBuilder\\QueryBuilder",
-            SemTypeInference.builderResult("createQueryBuilder", source, source.length))
-        assertEquals("\\Small\\SwooleEntityManager\\QueryBuilder\\RelationalQueryBuilder\\Bean\\Bracket",
-            SemTypeInference.builderResult("where", source, source.length))
-        assertNull(SemTypeInference.builderResult("createQueryBuilder", "<?php\n", 6))
-        assertNull(SemTypeInference.builderResult("notSmall", source, source.length))
+    @Test fun doesNotInventTypesForUnrelatedGetMethods() {
+        val source = "<?php\nuse Demo\\EntityManager\\UserManager;\n"
+        assertNull(SemTypeInference.factoryResult(
+            source, source.length, "UserManager::class", "$" + "cache",
+        ))
+        assertNull(SemTypeInference.factoryResult(
+            source, source.length, "UserManager::class", "$" + "repository",
+        ))
+    }
+
+    @Test fun acceptsTypedSmallFactoryWithArbitraryVariableName() {
+        val source = "<?php\nuse Demo\\EntityManager\\UserManager;\n" +
+            "/** @var \\Small\\SwooleEntityManager\\Factory\\EntityManagerFactory $" + "locator */\n"
+        assertEquals("\\Demo\\EntityManager\\UserManager", SemTypeInference.factoryResult(
+            source, source.length, "managerClass: UserManager::class", "$" + "locator",
+        ))
     }
 
     @Test fun resolvesClassNamesWithGroupedImports() {

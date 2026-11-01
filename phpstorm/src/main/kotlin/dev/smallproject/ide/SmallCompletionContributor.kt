@@ -47,6 +47,20 @@ class SmallCompletionContributor : CompletionContributor() {
                         .withTypeText("ConditionField", true)
                 }
             }
+            "field" -> if ('.' in insertText) {
+                // A dotted lookup is display syntax only; insert two valid PHP arguments.
+                item.withTypeText("Small ORM field", true)
+                    .withInsertHandler { insertion, _ ->
+                        val document = insertion.document
+                        val edit = QualifiedFieldInsertion.plan(
+                            document.text, insertion.startOffset, insertion.tailOffset, insertText,
+                        )
+                        if (edit != null) {
+                            document.replaceString(edit.start, edit.end, edit.replacement)
+                            insertion.editor.caretModel.moveToOffset(edit.caretOffset)
+                        }
+                    }
+            } else item.withTypeText("Small ORM field", true)
             "condition-operator" -> {
                 val label = insertText.substringAfterLast('\\')
                 item.withPresentableText(label)

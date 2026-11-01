@@ -53,9 +53,17 @@ internal data class NativeProjectIndex(
                 entities[entity]?.fields.orEmpty().map { "$alias.$it" }
             }.distinct().sorted()
             "field", "relation" -> {
-                val entity = aliases[context.alias ?: root] ?: return emptyList()
+                val qualifiedAlias = if (context.kind == "field" && '.' in context.typedPrefix) {
+                    context.typedPrefix.substringBefore('.')
+                } else null
+                val selectedAlias = qualifiedAlias ?: context.alias ?: root
+                val entity = aliases[selectedAlias] ?: return emptyList()
                 val info = entities[entity] ?: return emptyList()
-                if (context.kind == "field") info.fields.sorted() else info.relations.keys.sorted()
+                when {
+                    context.kind == "relation" -> info.relations.keys.sorted()
+                    qualifiedAlias != null -> info.fields.sorted().map { "$selectedAlias.$it" }.filter { it.startsWith(context.typedPrefix) }
+                    else -> info.fields.sorted()
+                }
             }
             else -> emptyList()
         }
@@ -98,9 +106,14 @@ internal object NativePhpIndexer {
             if (source.length > 2 * 1024 * 1024) emptyList() else symbols(source)
         }.associateBy { it.name }
         val entities = mutableMapOf<String, NativeEntity>()
-        val managers = mutableMapOf<String, String>()
+        val managers = symbols.values.mapNotNull { symbol ->
+            symbol.managedEntity?.let { symbol.name to it }
+        }.toMap().toMutableMap()
+        val mappedEntities = managers.values.toSet()
         for (symbol in symbols.values) {
-            if (symbol.entity) {
+            // A class explicitly mapped by a Small manager is an entity even when its
+            // marker attribute is inherited, aliased or omitted in legacy source.
+            if (symbol.entity || symbol.name in mappedEntities) {
                 val fields = linkedSetOf<String>()
                 val relations = linkedMapOf<String, String?>()
                 fun inherit(name: String, visited: MutableSet<String>) {
@@ -113,7 +126,6 @@ internal object NativePhpIndexer {
                 inherit(symbol.name, mutableSetOf())
                 entities[symbol.name] = NativeEntity(fields, relations)
             }
-            if (symbol.managedEntity != null) managers[symbol.name] = symbol.managedEntity
         }
         return NativeProjectIndex(entities.toSortedMap(), managers.toSortedMap())
     }
