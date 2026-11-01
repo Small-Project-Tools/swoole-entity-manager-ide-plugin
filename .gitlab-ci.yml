@@ -36,7 +36,7 @@ phpstorm_build:
   script:
     - df -h .
     - cd phpstorm
-    - gradle --no-daemon --max-workers=1 --console=plain --stacktrace test buildPlugin
+    - gradle --no-daemon --max-workers=1 --console=plain --stacktrace verifyPluginConfiguration test buildPlugin
     - ls -lh build/distributions/*.zip
     - jar tf build/libs/*-base.jar | grep -F 'META-INF/plugin.xml'
     - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/SmallCompletionContributor.class'
