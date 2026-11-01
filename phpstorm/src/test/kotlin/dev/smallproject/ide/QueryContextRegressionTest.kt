@@ -134,4 +134,31 @@ class QueryContextRegressionTest {
         assertEquals("Demo\\EntityManager\\UserManager", context?.manager)
         assertEquals("user", context?.rootAlias)
     }
+    @Test fun managerAliasWithoutManagerSuffixResolves() {
+        val source = listOf(
+            "<?php",
+            "namespace App;",
+            "use Demo\\EntityManager\\UserManager as Customer;",
+            "function apply(Customer " + 36.toChar() + "repository): void {",
+            "    " + 36.toChar() + "query = " + 36.toChar() + "repository->createQueryBuilder('u');",
+            "    " + 36.toChar() + "query->getFieldForCondition(",
+        ).joinToString("\n")
+        val context = QueryContextResolver.resolve(source)
+        assertEquals("Demo\\EntityManager\\UserManager", context?.manager)
+        assertEquals("u", context?.rootAlias)
+    }
+
+    @Test fun nullableManagerPropertyResolvesThroughAlias() {
+        val source = listOf(
+            "<?php",
+            "namespace App;",
+            "use Demo\\EntityManager\\UserManager as Customer;",
+            "class Example {",
+            "    private ?Customer " + 36.toChar() + "repository = null;",
+            "    public function apply(): void {",
+            "        " + 36.toChar() + "query = " + 36.toChar() + "this->repository->createQueryBuilder('u');",
+            "        " + 36.toChar() + "query->getFieldForCondition(",
+        ).joinToString("\n")
+        assertEquals("Demo\\EntityManager\\UserManager", QueryContextResolver.resolve(source)?.manager)
+    }
 }

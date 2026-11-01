@@ -9,16 +9,17 @@ internal object SemTypeInference {
     private val classReference = Regex("""^\s*(?:(?:managerClass|manager)\s*:\s*)?([\\\w]+)\s*::\s*class\s*$""")
     private val variable = Regex("""^\$(?:(?:this)->)?([A-Za-z_]\w*)$""")
     private val typedFactory = Regex(
-        """\b(?:[\\\w]*EntityManagerFactory|[\\\w]*ManagerFactory)\s+\$(\w+)""",
+        """\b(?:[\\\w]*EntityManagerFactory(?:Interface)?|[\\\w]*ManagerFactory(?:Interface)?)\s+\$(\w+)""",
     )
 
     fun factoryResult(source: String, offset: Int, argument: String, receiver: String): String? {
         if (source.length > QueryContextResolver.MAX_SOURCE_LENGTH || offset !in 0..source.length) return null
         val match = classReference.matchEntire(argument) ?: return null
         val raw = match.groupValues[1]
-        if (!raw.substringAfterLast('\\').endsWith("Manager")) return null
+        val managerClass = PhpNameResolver.fromSource(source, offset, raw) ?: return null
+        if (!managerClass.substringAfterLast('\\').endsWith("Manager")) return null
         if (!isFactoryReceiver(receiver, source.take(offset))) return null
-        return PhpNameResolver.fromSource(source, offset, raw)?.let { "\\$it" }
+        return "\\" + managerClass
     }
 
     private fun isFactoryReceiver(receiver: String, before: String): Boolean {
@@ -26,6 +27,8 @@ internal object SemTypeInference {
         // A typed factory can have any property or variable name.
         if (typedFactory.findAll(before).any { it.groupValues[1] == name }) return true
         // Common explicit factory names; do not intercept unrelated get() calls.
-        return name.endsWith("Factory", ignoreCase = true)
+        return name.equals("factory", ignoreCase = true) ||
+            name.equals("entityManagerFactory", ignoreCase = true) ||
+            name.equals("managerFactory", ignoreCase = true)
     }
 }

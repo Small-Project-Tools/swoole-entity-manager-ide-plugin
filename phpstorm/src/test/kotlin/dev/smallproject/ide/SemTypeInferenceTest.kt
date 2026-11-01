@@ -44,4 +44,21 @@ class SemTypeInferenceTest {
         assertEquals("Demo\\EntityManager\\BillingManager".replace("BillingManager", "CompanyManager"),
             PhpNameResolver.fromSource(source, source.length, "BillingManager"))
     }
+    @Test fun acceptsManagerAliasWithoutManagerSuffix() {
+        val source = "<?php\nuse Demo\\EntityManager\\UserManager as Account;\n"
+        assertEquals("\\Demo\\EntityManager\\UserManager",
+            SemTypeInference.factoryResult(source, source.length, "Account::class", "$" + "factory"))
+    }
+
+    @Test fun acceptsTypedFactoryInterfaceWithArbitraryVariableName() {
+        val source = "<?php\nuse Demo\\EntityManager\\UserManager;\n" +
+            "/** @var \\Small\\SwooleEntityManagerBundle\\Contract\\EntityManagerFactoryInterface " + "$" + "locator */\n"
+        assertEquals("\\Demo\\EntityManager\\UserManager",
+            SemTypeInference.factoryResult(source, source.length, "UserManager::class", "$" + "locator"))
+    }
+
+    @Test fun unrelatedFactoryDoesNotHijackGetCall() {
+        val source = "<?php\nuse Demo\\EntityManager\\UserManager;\n"
+        assertNull(SemTypeInference.factoryResult(source, source.length, "UserManager::class", "$" + "cacheFactory"))
+    }
 }

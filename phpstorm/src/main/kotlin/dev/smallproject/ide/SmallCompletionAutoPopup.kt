@@ -28,11 +28,11 @@ class SmallCompletionAutoPopup : TypedHandlerDelegate() {
 
     companion object {
         private val INTERESTING_METHOD = Regex(
-            """->\s*(?:firstCondition|andCondition|orCondition|xorCondition|getFieldForCondition|setParameter|addOrderBy|join|leftJoin|rightJoin|innerJoin)\s*\(""",
+            """->\s*(?:firstCondition|andCondition|orCondition|xorCondition|getFieldForCondition|setParameter|addOrderBy|select|addSelect|join|leftJoin|rightJoin|innerJoin|get)\s*\(""",
         )
         private val COMPLETION_KINDS = setOf(
             "condition-field", "condition-operator", "condition-value",
-            "field", "alias", "relation", "projection", "parameter",
+            "field", "alias", "relation", "projection", "parameter", "manager",
         )
     }
 }
