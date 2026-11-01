@@ -20,6 +20,7 @@ dependencies {
     testImplementation(kotlin("test-junit5"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
+    testRuntimeOnly("junit:junit:4.13.2") // Required by JetBrains test bootstrap.
 }
 
 kotlin { jvmToolchain(21) }
