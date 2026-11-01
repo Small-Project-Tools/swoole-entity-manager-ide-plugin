@@ -22,13 +22,17 @@ internal object QualifiedFieldInsertion {
 
         // A bare first argument is legal while editing, but the selected completion
         // must be emitted as fieldName and entityAlias PHP string arguments.
-        val bareArgument = Regex("""getFieldForCondition\s*\(\s*(?:fieldName\s*:\s*)?(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)?$""")
+        val bareArgument = Regex("""getFieldForCondition\s*\(\s*(fieldName\s*:\s*)?([A-Za-z_]\w*(?:\.(?:[A-Za-z_]\w*)?)?)?$""")
         val preceding = source.substring(maxOf(0, startOffset - 160), startOffset)
-        if (bareArgument.containsMatchIn(preceding)) {
-            val named = Regex("""getFieldForCondition\s*\(\s*fieldName\s*:\s*(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)?$""")
-                .containsMatchIn(preceding)
+        val bare = bareArgument.find(preceding)
+        if (bare != null) {
+            val alreadyTyped = bare.groupValues[2]
+            // IntelliJ may begin its lookup insertion after a typed 'owner.' prefix.
+            // Replace the whole first argument, not just the inserted lookup suffix.
+            val argumentStart = startOffset - alreadyTyped.length
+            val named = bare.groupValues[1].isNotBlank()
             val aliasParameter = if (named) "entityAlias: '$alias'" else "'$alias'"
-            return Edit(startOffset, tailOffset, "'$field', $aliasParameter")
+            return Edit(argumentStart, tailOffset, "'$field', $aliasParameter")
         }
 
         val left = source.lastIndexOf('\'', startOffset - 1)

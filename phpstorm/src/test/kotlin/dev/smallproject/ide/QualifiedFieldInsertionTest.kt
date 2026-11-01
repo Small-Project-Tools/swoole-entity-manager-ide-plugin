@@ -47,4 +47,37 @@ class QualifiedFieldInsertionTest {
             code, code.indexOf("owner.name"), code.indexOf("owner.name") + "owner.name".length, "owner.name",
         ))
     }
+    @Test fun bareAliasDotPrefixIsRemovedWhenLookupInsertsAfterTheDot() {
+        val source = "\$query->getFieldForCondition(owner.owner.name)"
+        val start = source.lastIndexOf("owner.name")
+        val end = start + "owner.name".length
+        val edit = assertNotNull(QualifiedFieldInsertion.plan(source, start, end, "owner.name"))
+        assertEquals(
+            "\$query->getFieldForCondition('name', 'owner')",
+            source.replaceRange(edit.start, edit.end, edit.replacement),
+        )
+    }
+
+    @Test fun alreadyTypedAliasAndFieldFragmentDoNotSurviveInsertion() {
+        val source = "\$query->getFieldForCondition(owner.naowner.name)"
+        val start = source.lastIndexOf("owner.name")
+        val end = start + "owner.name".length
+        val edit = assertNotNull(QualifiedFieldInsertion.plan(source, start, end, "owner.name"))
+        assertEquals(
+            "\$query->getFieldForCondition('name', 'owner')",
+            source.replaceRange(edit.start, edit.end, edit.replacement),
+        )
+    }
+
+    @Test fun namedFieldArgumentRemainsNamedWhenCompletingAfterAliasDot() {
+        val source = "\$query->getFieldForCondition(fieldName: owner.owner.name)"
+        val start = source.lastIndexOf("owner.name")
+        val end = start + "owner.name".length
+        val edit = assertNotNull(QualifiedFieldInsertion.plan(source, start, end, "owner.name"))
+        assertEquals(
+            "\$query->getFieldForCondition(fieldName: 'name', entityAlias: 'owner')",
+            source.replaceRange(edit.start, edit.end, edit.replacement),
+        )
+    }
+
 }
