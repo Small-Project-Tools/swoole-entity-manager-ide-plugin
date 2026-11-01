@@ -120,4 +120,18 @@ class QueryContextRegressionTest {
         """.trimIndent()))
     }
 
+    @Test fun groupedAliasedManagerImportResolvesToIndexedManager() {
+        val source = listOf(
+            "<?php",
+            "namespace App;",
+            "use Demo\\EntityManager\\{UserManager as AccountManager, CompanyManager};",
+            "\$manager = \$factory->get(AccountManager::class);",
+            "\$query = \$manager->createQueryBuilder('user');",
+            "\$query->getFieldForCondition(",
+        ).joinToString("\n")
+        val context = QueryContextResolver.resolve(source)
+        assertEquals("field", context?.kind)
+        assertEquals("Demo\\EntityManager\\UserManager", context?.manager)
+        assertEquals("user", context?.rootAlias)
+    }
 }

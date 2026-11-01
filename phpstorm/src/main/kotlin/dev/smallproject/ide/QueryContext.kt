@@ -65,16 +65,10 @@ object QueryContextResolver {
             }
         }
         val before = sourceBeforeCaret.substring(0, call.open)
-        val importMap = imports.findAll(before).associate { m ->
-            val full = m.groupValues[1].trimStart('\\')
-            m.groupValues[2].ifBlank { full.substringAfterLast('\\') } to full
-        }
+        val importMap = PhpNameResolver.imports(before)
         val currentNamespace = namespace.findAll(before).lastOrNull()?.groupValues?.get(1)
-        fun fqcn(value: String): String {
-            val cleaned = value.trimStart('\\')
-            return if (value.startsWith("\\")) cleaned else importMap[cleaned]
-                ?: if ('\\' in cleaned || currentNamespace == null) cleaned else "$currentNamespace\\$cleaned"
-        }
+        fun fqcn(value: String): String =
+            PhpNameResolver.resolve(value, currentNamespace, importMap)
         val managers = mutableMapOf<String, String>()
         for (m in annotated.findAll(before)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
         for (m in typedManagerParameter.findAll(before)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
