@@ -185,4 +185,52 @@ class QueryContextRegressionTest {
         assertEquals("Op", context?.operatorReference)
     }
 
+    @Test fun builderFromPreviousMethodDoesNotLeakIntoCurrentMethod() {
+        val source = "<?php\n" +
+            "use Demo\\EntityManager\\UserManager;\n" +
+            "function first(UserManager \$manager): void {\n" +
+            "    \$query = \$manager->createQueryBuilder('user');\n" +
+            "}\n" +
+            "function second(): void {\n" +
+            "    \$query->getFieldForCondition("
+        assertNull(QueryContextResolver.resolve(source))
+    }
+
+    @Test fun managerTypesAreResolvedFromCurrentMethodOnly() {
+        val source = "<?php\n" +
+            "use Demo\\EntityManager\\{UserManager, CompanyManager};\n" +
+            "function first(UserManager \$manager): void {\n" +
+            "    \$query = \$manager->createQueryBuilder('user');\n" +
+            "}\n" +
+            "function second(CompanyManager \$manager): void {\n" +
+            "    \$query = \$manager->createQueryBuilder('company');\n" +
+            "    \$query->getFieldForCondition("
+        val context = QueryContextResolver.resolve(source)
+        assertEquals("Demo\\EntityManager\\CompanyManager", context?.manager)
+        assertEquals("company", context?.rootAlias)
+    }
+
+    @Test fun priorManagerClassDoesNotLeakIntoAnUnrelatedClass() {
+        val source = "<?php\nnamespace Demo;\n" +
+            "class UserManager {\n" +
+            "    function build(): void { \$query = \$this->createQueryBuilder('user'); }\n" +
+            "}\n" +
+            "class OtherService {\n" +
+            "    function build(): void {\n" +
+            "        \$query = \$this->createQueryBuilder('user');\n" +
+            "        \$query->getFieldForCondition("
+        assertNull(QueryContextResolver.resolve(source))
+    }
+
+    @Test fun priorManagerPropertyDoesNotLeakIntoAnotherClass() {
+        val source = "<?php\n" +
+            "use Demo\\EntityManager\\UserManager;\n" +
+            "class One { private UserManager \$manager; }\n" +
+            "class Two {\n" +
+            "    public function run(): void {\n" +
+            "        \$query = \$this->manager->createQueryBuilder('user');\n" +
+            "        \$query->getFieldForCondition("
+        assertNull(QueryContextResolver.resolve(source))
+    }
+
 }

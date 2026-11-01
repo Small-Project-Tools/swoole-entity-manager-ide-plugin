@@ -22,7 +22,8 @@ object QueryContextResolver {
     private val annotated = Regex("""@var\s+\??([\\\w]+)\s+\$(\w+)""")
     private val typedManagerParameter = Regex("""(?:\(|,)\s*\??([\\\w]+)\s+\$(\w+)""")
     private val typedManagerProperty = Regex("""\b(?:private|protected|public)\s+(?:readonly\s+)?\??([\\\w]+)\s+\$(\w+)""")
-    private val enclosingManagerClass = Regex("""\bclass\s+(\w+Manager)\b""")
+    private val enclosingClass = Regex("""\bclass\s+([A-Za-z_]\w*)\b""")
+    private val functionDeclaration = Regex("""\bfunction\s+(?:&\s*)?\w*\s*\(""")
     private val builder = Regex("""\$(\w+)\s*=\s*\$((?:this->)?\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
     private val directBuilder = Regex("""\$((?:this->)?\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
     private val methodBeforeParen = Regex("""->\s*([A-Za-z_]\w*)\s*$""")
@@ -66,12 +67,16 @@ object QueryContextResolver {
             }
         }
         val before = sourceBeforeCaret.substring(0, call.open)
+        val executableBefore = PhpExecutableSourceMask.mask(before)
+        val localStart = functionDeclaration.findAll(executableBefore).lastOrNull()?.range?.first ?: 0
+        val localBefore = before.substring(localStart)
+        val classStart = enclosingClass.findAll(executableBefore).lastOrNull()?.range?.first ?: 0
+        val classBefore = before.substring(classStart)
         if (role == "parameter") {
-            // Parameter names come from placeholders in the current PHP method;
-            // resolving a Manager is unnecessary and breaks chained setParameter() calls.
-            val scope = before.substring(before.lastIndexOf("function ").coerceAtLeast(0))
-            if (!scope.contains("->createQueryBuilder(")) return null
-            val names = placeholder.findAll(scope)
+            // Collect placeholders only from the current PHP method; never leak
+            // parameters or builder state from preceding methods in the same file.
+            if (!localBefore.contains("->createQueryBuilder(")) return null
+            val names = placeholder.findAll(localBefore)
                 .map { it.groupValues[1] }.distinct().sorted().toList()
             return QueryContext(kind = "parameter", parameters = names, typedPrefix = typed)
         }
@@ -79,26 +84,27 @@ object QueryContextResolver {
         val currentNamespace = namespace.findAll(before).lastOrNull()?.groupValues?.get(1)
         fun fqcn(value: String): String = PhpNameResolver.resolve(value, currentNamespace, importMap)
         val managers = mutableMapOf<String, String>()
-        for (m in annotated.findAll(before)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
-        for (m in typedManagerParameter.findAll(before)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
-        for (m in typedManagerProperty.findAll(before)) managers["this->" + m.groupValues[2]] = fqcn(m.groupValues[1])
-        // Within a mapped Manager subclass, $this is itself the query factory.
-        // The native index later validates this name against registered ORM managers.
-        enclosingManagerClass.findAll(before).lastOrNull()?.groupValues?.get(1)?.let {
-            managers["this"] = fqcn(it)
-        }
-        for (m in factory.findAll(before)) managers[m.groupValues[1]] = fqcn(m.groupValues[2])
+        for (m in annotated.findAll(localBefore)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
+        for (m in typedManagerParameter.findAll(localBefore)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
+        for (m in typedManagerProperty.findAll(classBefore)) managers["this->" + m.groupValues[2]] = fqcn(m.groupValues[1])
+        // $this is a query factory only inside the current Manager class.
+        // The native index validates the class against registered ORM managers.
+        enclosingClass.findAll(executableBefore).lastOrNull()?.groupValues?.get(1)
+            ?.takeIf { it.endsWith("Manager") }?.let { managers["this"] = fqcn(it) }
+        for (m in factory.findAll(localBefore)) managers[m.groupValues[1]] = fqcn(m.groupValues[2])
         val builders = mutableMapOf<String, Pair<String, String?>>()
         val builderAssignments = mutableMapOf<String, Int>()
         val builderJoins = mutableMapOf<String, List<Map<String, String>>>()
-        for (m in builder.findAll(before)) {
+        for (m in builder.findAll(localBefore)) {
             val manager = managers[m.groupValues[2]] ?: continue
             val variable = m.groupValues[1]
-            builders[variable] = manager to builderAlias(before, m.range.last + 1)
-            builderAssignments[variable] = m.range.first
-            // Joins chained during assignment belong to this builder and remain available later.
-            val end = before.indexOf(';', m.range.last).let { if (it < 0) before.length else it }
-            builderJoins[variable] = collectJoins(before.substring(m.range.first, end))
+            val absoluteStart = localStart + m.range.first
+            val absoluteEnd = localStart + m.range.last
+            builders[variable] = manager to builderAlias(before, absoluteEnd + 1)
+            builderAssignments[variable] = absoluteStart
+            // Joins chained during assignment belong to this local builder.
+            val end = before.indexOf(';', absoluteEnd).let { if (it < 0) before.length else it }
+            builderJoins[variable] = collectJoins(before.substring(absoluteStart, end))
         }
         val start = maxOf(before.lastIndexOf(';'), before.lastIndexOf('{'), before.lastIndexOf('}')) + 1
         val expression = before.substring(start)
