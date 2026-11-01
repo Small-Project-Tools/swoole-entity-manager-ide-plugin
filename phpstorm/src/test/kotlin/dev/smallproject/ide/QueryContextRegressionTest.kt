@@ -233,4 +233,27 @@ class QueryContextRegressionTest {
         assertNull(QueryContextResolver.resolve(source))
     }
 
+    @Test fun qualifiedJoinAliasCanCompleteWithOnlyTheDotTyped() {
+        val source = listOf(
+            "<?php",
+            "use Demo\\EntityManager\\UserManager;",
+            "\$manager = \$factory->get(UserManager::class);",
+            "\$query = \$manager->createQueryBuilder('user');",
+            "\$query->leftJoin('user', 'company', 'owner')->endJoin();",
+            "\$query->getFieldForCondition(owner.",
+        ).joinToString("\n")
+        val context = QueryContextResolver.resolve(source)
+        assertEquals("field", context?.kind)
+        assertEquals("owner.", context?.typedPrefix)
+        assertEquals("owner", context?.joins?.singleOrNull()?.get("alias"))
+    }
+
+    @Test fun invalidMultipleAliasDotsAreNotCompleted() {
+        val source = "<?php\n" +
+            "\$manager = \$factory->get(Demo\\EntityManager\\UserManager::class);\n" +
+            "\$query = \$manager->createQueryBuilder('user');\n" +
+            "\$query->getFieldForCondition(owner.."
+        assertNull(QueryContextResolver.resolve(source))
+    }
+
 }

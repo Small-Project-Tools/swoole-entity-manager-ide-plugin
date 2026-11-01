@@ -62,7 +62,7 @@ object QueryContextResolver {
             if (quote == '\'' || quote == '"') {
                 argument.drop(1).also { if (it.contains(quote)) return null }
             } else {
-                if (!Regex("""^(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)?$""").matches(argument)) return null
+                if (!Regex("""^(?:[A-Za-z_]\w*(?:\.(?:[A-Za-z_]\w*)?)?)?$""").matches(argument)) return null
                 argument
             }
         }
