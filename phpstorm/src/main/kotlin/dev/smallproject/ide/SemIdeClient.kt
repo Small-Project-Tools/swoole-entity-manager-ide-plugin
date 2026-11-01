@@ -1,7 +1,7 @@
 package dev.smallproject.ide
 
 
-/** Runs the offline PHP indexer outside the IDE read action with bounded time and output. */
+/** Legacy JSON protocol retained for stable completion-cache keys and the shared CLI tests. */
 object SemIdeClient {
     private val labelPattern = Regex(""""label"\s*:\s*"((?:\\.|[^"\\])*)"""")
 
@@ -10,6 +10,8 @@ object SemIdeClient {
         context.manager?.let { append(",\"manager\":\"").append(escape(it)).append('"') }
         context.rootAlias?.let { append(",\"rootAlias\":\"").append(escape(it)).append('"') }
         context.alias?.let { append(",\"alias\":\"").append(escape(it)).append('"') }
+        context.queryReference?.let { append(",\"queryReference\":\"").append(escape(it)).append('"') }
+        context.operatorReference?.let { append(",\"operatorReference\":\"").append(escape(it)).append('"') }
         append(",\"joins\":[")
         context.joins.forEachIndexed { index, join ->
             if (index > 0) append(',')

@@ -1,7 +1,7 @@
 <idea-plugin>
   <id>dev.smallproject.entitymanager</id>
   <name>Small Entity Manager</name>
-  <version>0.2.5-dev-2</version>
+  <version>0.2.5-dev-3</version>
   <idea-version since-build="251"/>
   <vendor url="https://git.small-project.dev/pub/ide/small-entity-manager-ide-core">Small Project</vendor>
   <description><![CDATA[Native PHP-free completion and PhpStorm type inference for Small Swoole Entity Manager fields, relations, aliases, and manager factories.]]></description>
@@ -9,6 +9,7 @@
   <depends>com.jetbrains.php</depends>
   <extensions defaultExtensionNs="com.intellij">
     <completion.contributor language="PHP" implementationClass="dev.smallproject.ide.SmallCompletionContributor"/>
+    <typedHandler implementation="dev.smallproject.ide.SmallCompletionAutoPopup"/>
   </extensions>
   <extensions defaultExtensionNs="com.jetbrains">
     <php.typeProvider4 implementation="dev.smallproject.ide.SmallPhpTypeProvider"/>

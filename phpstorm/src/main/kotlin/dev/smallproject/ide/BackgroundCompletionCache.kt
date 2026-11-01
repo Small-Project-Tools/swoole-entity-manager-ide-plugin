@@ -25,7 +25,7 @@ internal class BackgroundCompletionCache(
             executor.execute {
                 try {
                     val labels = runCatching(load).getOrDefault(emptyList())
-                    // Negative results are short-lived, so transient PHP failures are retried.
+                    // Negative results are short-lived, so transient indexing failures are retried.
                     val lifetime = if (labels.isEmpty()) TimeUnit.SECONDS.toNanos(10) else ttlNanos
                     if (cache.size >= 256) cache.clear()
                     cache[key] = Entry(nanoTime() + lifetime, labels)

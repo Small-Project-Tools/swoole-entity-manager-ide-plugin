@@ -60,6 +60,6 @@ class QueryContextRegressionTest {
             ${'$'}manager->createQueryBuilder(alias: 'person')->where()
                 ->firstCondition(var1: 'person.deletedAt IS NULL
         """.trimIndent()))
-        assertNull(QueryContextResolver.methodArgumentRole("firstCondition", "var1", 0))
+        assertEquals("condition-field", QueryContextResolver.methodArgumentRole("firstCondition", "var1", 0))
     }
 }

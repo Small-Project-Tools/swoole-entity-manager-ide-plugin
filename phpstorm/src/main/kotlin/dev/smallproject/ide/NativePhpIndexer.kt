@@ -18,6 +18,10 @@ internal data class NativeProjectIndex(
     fun complete(context: QueryContext): List<String> {
         if (context.kind == "manager") return managers.keys.sorted().map { "\\$it::class" }
         if (context.kind == "parameter") return context.parameters.distinct().sorted()
+        if (context.kind == "condition-operator") {
+            val type = context.operatorReference ?: return emptyList()
+            return ConditionOperatorCatalog.cases.map { "$type::$it" }
+        }
         val manager = managers.keys.firstOrNull { it.equals(context.manager?.trimStart('\\'), ignoreCase = true) }
             ?: return emptyList()
         val root = context.rootAlias ?: managers[manager]?.substringAfterLast('\\')?.replaceFirstChar { it.lowercase() }
@@ -31,6 +35,19 @@ internal data class NativeProjectIndex(
             aliases[name] = nextEntity
         }
         return when (context.kind) {
+            "condition-field", "condition-value" -> {
+                val reference = context.queryReference ?: return emptyList()
+                val allowed = if ("->createQueryBuilder(" in reference) {
+                    aliases.filterKeys { it == root } // a new inline builder does not carry joins
+                } else aliases
+                allowed.flatMap { (alias, entity) ->
+                    entities[entity]?.fields.orEmpty().map { field ->
+                        val quotedField = field.replace("\\", "\\\\").replace("'", "\\'")
+                        if (alias == root) "$reference->getFieldForCondition('$quotedField')"
+                        else "$reference->getFieldForCondition('$quotedField', '$alias')"
+                    }
+                }.distinct().sorted() + if (context.kind == "condition-value") listOf("null") else emptyList()
+            }
             "alias" -> aliases.keys.sorted()
             "projection" -> aliases.flatMap { (alias, entity) ->
                 entities[entity]?.fields.orEmpty().map { "$alias.$it" }

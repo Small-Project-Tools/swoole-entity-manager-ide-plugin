@@ -8,6 +8,10 @@ data class QueryContext(
     val joins: List<Map<String, String>> = emptyList(),
     val parameters: List<String> = emptyList(),
     val typedPrefix: String = "",
+    /** A project-local query builder variable, or a safe inline root builder expression. */
+    val queryReference: String? = null,
+    /** The enum name as visible in the current PHP source (import alias or FQCN). */
+    val operatorReference: String? = null,
 )
 
 /** Conservative PHP source analysis for query literal completion, without executing PHP. */
@@ -17,6 +21,7 @@ object QueryContextResolver {
     private val namespace = Regex("""\bnamespace\s+([\\\w]+)\s*;""")
     private val factory = Regex("""\$(\w+)\s*=\s*[^;]*?->\s*get\s*\(\s*(?:(?:managerClass|manager)\s*:\s*)?([\\\w]+)::class""")
     private val annotated = Regex("""@var\s+([\\\w]+Manager)\s+\$(\w+)""")
+    private val typedManagerParameter = Regex("""(?:\(|,)\s*([\\\w]+Manager)\s+\$(\w+)""")
     private val builder = Regex("""\$(\w+)\s*=\s*\$(\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
     private val directBuilder = Regex("""\$(\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
     private val methodBeforeParen = Regex("""->\s*([A-Za-z_]\w*)\s*$""")
@@ -40,10 +45,17 @@ object QueryContextResolver {
             if (!Regex("""^[\\\w]*$""").matches(typed)) return null
             return QueryContext(kind = "manager", typedPrefix = typed.substringAfterLast('\\'))
         }
-        val quote = literal.trimStart().firstOrNull()
-        if (quote != '\'' && quote != '"') return null
-        val typed = literal.trimStart().drop(1)
-        if (typed.contains(quote)) return null
+        val isExpression = role == "condition-field" || role == "condition-operator" || role == "condition-value"
+        val typed = if (isExpression) {
+            literal.trimStart().also {
+                // The completion provider owns whole PHP expressions, not arbitrary PHP syntax.
+                if (!Regex("""^[\\\w$>:]*$""").matches(it)) return null
+            }
+        } else {
+            val quote = literal.trimStart().firstOrNull()
+            if (quote != '\'' && quote != '"') return null
+            literal.trimStart().drop(1).also { if (it.contains(quote)) return null }
+        }
         val before = sourceBeforeCaret.substring(0, call.open)
         val importMap = imports.findAll(before).associate { m ->
             val full = m.groupValues[1].trimStart('\\')
@@ -57,6 +69,7 @@ object QueryContextResolver {
         }
         val managers = mutableMapOf<String, String>()
         for (m in annotated.findAll(before)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
+        for (m in typedManagerParameter.findAll(before)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
         for (m in factory.findAll(before)) managers[m.groupValues[1]] = fqcn(m.groupValues[2])
         val builders = mutableMapOf<String, Pair<String, String?>>()
         for (m in builder.findAll(before)) {
@@ -76,6 +89,13 @@ object QueryContextResolver {
         val activeQueryVariable = if (inline == null) {
             Regex("""\$(\w+)\s*->""").find(expression)?.groupValues?.get(1)
         } else null
+        val queryReference = when {
+            activeQueryVariable != null && activeQueryVariable in builders -> "$" + activeQueryVariable
+            inline != null -> closingParen(expression, inline.range.last)?.let { end ->
+                expression.substring(inline.range.first, end + 1)
+            }
+            else -> null
+        }
         val joins = if (activeQueryVariable == null) {
             collectJoins(expression)
         } else {
@@ -99,6 +119,11 @@ object QueryContextResolver {
             joins = joins,
             parameters = parameters,
             typedPrefix = typed,
+            queryReference = queryReference,
+            operatorReference = if (role == "condition-operator") {
+                val type = "Small\\SwooleEntityManager\\QueryBuilder\\RelationalQueryBuilder\\Enum\\ConditionOperatorType"
+                importMap.entries.firstOrNull { it.value == type }?.key ?: "\\$type"
+            } else null,
         )
     }
 
@@ -106,6 +131,9 @@ object QueryContextResolver {
     internal fun methodArgumentRole(method: String, named: String?, index: Int): String? {
         val signature = when (method) {
             "get" -> listOf("managerClass" to "manager", "new" to "")
+            "firstCondition", "andCondition", "orCondition", "xorCondition" ->
+                listOf("var1" to "condition-field", "operator" to "condition-operator",
+                    "var2" to "condition-value")
             "getFieldForCondition" -> listOf("fieldName" to "field", "entityAlias" to "alias")
             "addOrderBy" -> listOf("fieldName" to "field", "entityAlias" to "alias", "sens" to "")
             "addFieldToUpdate" -> listOf("field" to "field", "update" to "")

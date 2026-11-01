@@ -7,6 +7,8 @@ Native PhpStorm 2025.1+ plugin for Small Swoole Entity Manager Core 3 and its Sy
 ## Features
 
 - Completion dropdown inside query string arguments: mapped entity fields, relations, join aliases, scalar projections, named parameters.
+- At `firstCondition()`, `andCondition()`, `orCondition()` and `xorCondition()`, suggest actual `ConditionField` expressions such as `$query->getFieldForCondition('email')`; after the comma, suggest `ConditionOperatorType` enum cases. The dropdown also opens when typing `(` or `,` inside these calls.
+- Supports a stored `$query` or a simple inline `createQueryBuilder()` call. Inline expressions only suggest root entity fields, not joins from another builder instance.
 - Completion of manager-class references in a factory call: start typing \`$factory->get(Us\` and press **Ctrl+Space** to insert a qualified \`Manager::class\`.
 - Type inference through PhpStorm's **PhpTypeProvider4**, including \`$factory->get(UserManager::class)\` and the relevant Small query-builder, join and condition types.
 - Imported and aliased class names, grouped imports, local traits, ancestor entity properties, fluent calls, named arguments and stored query builders.
@@ -30,12 +32,13 @@ Uses Gradle 9.2.1, JDK 21 and the official PhpStorm 2025.1.3 SDK with its bundle
 
 Output: \`build/distributions/small-entity-manager-phpstorm-<version>.zip\`.
 
-Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-2\`.
+Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-3\`.
 
 ## Query example
 
 \`\`\`php
 use Demo\EntityManager\UserManager;
+use Small\SwooleEntityManager\QueryBuilder\RelationalQueryBuilder\Enum\ConditionOperatorType;
 
 /** @var \Small\SwooleEntityManager\Factory\EntityManagerFactory $factory */
 $manager = $factory->get(UserManager::class);
@@ -43,6 +46,11 @@ $query = $manager->createQueryBuilder('user');
 $query->leftJoin('user', 'company', 'owner')->endJoin();
 $query->getFieldForCondition(''); // Ctrl+Space: id, email, companyId, createdAt
 $query->getFieldForCondition('name', 'owner');
+$query->where()->firstCondition(
+    $query->getFieldForCondition('email'),
+    ConditionOperatorType::equal,
+    ':email',
+);
 \`\`\`
 
 **Signatures matter:** Core 3 factory uses \`get(string $manager, bool $new = false)\` whereas Symfony Bundle factory uses \`get(string $managerClass, bool $new = false)\`. Prefer positional \`get(UserManager::class)\` if the same source is intended for both. The plugin understands \`manager:\` and \`managerClass:\`, but it does not change those PHP signatures.

@@ -7,25 +7,54 @@ import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.psi.PsiDocumentManager
 
-/** Adds Small ORM literal suggestions without blocking the editor on project indexing. */
+/** Small ORM query completion. The native project scan never runs in the editor read action. */
 class SmallCompletionContributor : CompletionContributor() {
     override fun fillCompletionVariants(parameters: CompletionParameters, result: CompletionResultSet) {
         ProgressManager.checkCanceled()
         val project = parameters.position.project
         val document = PsiDocumentManager.getInstance(project).getDocument(parameters.originalFile) ?: return
         val offset = parameters.offset.coerceIn(0, document.textLength)
-        // Do not allocate or parse an unbounded PHP file during an IDE read action.
         if (offset > QueryContextResolver.MAX_SOURCE_LENGTH) return
-        val prefix = document.charsSequence.subSequence(0, offset).toString()
-        val context = QueryContextResolver.resolve(prefix) ?: return
-        ProgressManager.checkCanceled()
+
+        val source = document.charsSequence.subSequence(0, offset).toString()
+        val context = QueryContextResolver.resolve(source) ?: return
         val completion = result.withPrefixMatcher(context.typedPrefix)
-        for (name in SemIdeService.complete(project, parameters.editor, context)) {
+        for (insertText in SemIdeService.complete(project, parameters.editor, context)) {
             ProgressManager.checkCanceled()
-            val item = LookupElementBuilder.create(name).withTypeText("Small ORM / " + context.kind, true)
-            completion.addElement(if (context.kind == "manager") {
-                item.withLookupString(name.substringAfterLast('\\').removeSuffix("::class"))
-            } else item)
+            completion.addElement(element(context, insertText))
+        }
+    }
+
+    private fun element(context: QueryContext, insertText: String): LookupElementBuilder {
+        val item = LookupElementBuilder.create(insertText)
+        return when (context.kind) {
+            "manager" -> item
+                .withLookupString(insertText.substringAfterLast('\\').removeSuffix("::class"))
+                .withTypeText("Small Manager", true)
+            "condition-field", "condition-value" -> {
+                val field = Regex("""getFieldForCondition\('(\w+)'(?:,\s*'(\w+)')?\)""")
+                    .find(insertText)
+                if (field == null) {
+                    item.withTypeText("Condition value", true)
+                } else {
+                    val name = field.groupValues[1]
+                    val alias = field.groupValues[2]
+                    val label = if (alias.isBlank()) name else "$alias.$name"
+                    item.withPresentableText(label)
+                        .withLookupString(name)
+                        .withLookupString(label)
+                        .withTailText("  $insertText", true)
+                        .withTypeText("ConditionField", true)
+                }
+            }
+            "condition-operator" -> {
+                val label = insertText.substringAfterLast('\\')
+                item.withPresentableText(label)
+                    .withLookupString(label)
+                    .withLookupString(label.substringAfter("::"))
+                    .withTypeText("ConditionOperatorType", true)
+            }
+            else -> item.withTypeText("Small ORM / " + context.kind, true)
         }
     }
 }
