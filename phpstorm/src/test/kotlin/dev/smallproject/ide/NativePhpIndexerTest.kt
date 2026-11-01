@@ -76,4 +76,60 @@ class NativePhpIndexerTest {
         assertEquals("Generic\\Legacy", index.managers["Generic\\LegacyManager"])
     }
 
+    @Test fun commentsAndStringsDoNotCreatePhantomSymbols() {
+        val files = mapOf(
+            "Person.php" to """
+                <?php
+                namespace Synthetic;
+                use Small\SwooleEntityManager\Entity\Attribute\Field;
+                class Person {
+                    // #[Field] private string $commented;
+                    /*
+                     #[Field] private string $blocked;
+                    */
+                    private string $text = "#[Field] private string fake;";
+                    #[Field] private string $name;
+                }
+            """.trimIndent(),
+            "PersonManager.php" to """
+                <?php
+                namespace Synthetic;
+                use Small\SwooleEntityManager\EntityManager\Attribute\Entity;
+                /*
+                #[Entity(Person::class)]
+                class PhantomManager {}
+                */
+                #[Entity(Person::class)]
+                class PersonManager {}
+            """.trimIndent(),
+        )
+        val index = NativePhpIndexer.index(files)
+        assertEquals(mapOf("Synthetic\\PersonManager" to "Synthetic\\Person"), index.managers)
+        assertEquals(setOf("name"), index.entities.getValue("Synthetic\\Person").fields)
+    }
+
+    @Test fun entityLikeSyntaxInsideHeredocIsNotIndexed() {
+        val files = mapOf(
+            "Person.php" to """
+                <?php
+                namespace Synthetic;
+                use Small\SwooleEntityManager\Entity\Attribute\Field;
+                class Person {
+                    private string $template = <<<SQL
+                    #[Field] private string fake;
+                    SQL;
+                    #[Field] private string $real;
+                }
+            """.trimIndent(),
+            "Manager.php" to """
+                <?php
+                namespace Synthetic;
+                use Small\SwooleEntityManager\EntityManager\Attribute\Entity;
+                #[Entity(Person::class)] class PersonManager {}
+            """.trimIndent(),
+        )
+        val index = NativePhpIndexer.index(files)
+        assertEquals(setOf("real"), index.entities.getValue("Synthetic\\Person").fields)
+    }
+
 }

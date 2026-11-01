@@ -133,7 +133,11 @@ internal object NativePhpIndexer {
 
     private fun symbols(source: String): List<Symbol> {
         val result = mutableListOf<Symbol>()
+        // Keep offsets but discard declarations that exist only in comments,
+        // PHP literals, heredocs or nowdocs.
+        val executable = PhpExecutableSourceMask.mask(source)
         for (declaration in classDeclaration.findAll(source)) {
+            if (executable.getOrNull(declaration.range.first)?.isWhitespace() != false) continue
             val bodyStart = declaration.range.last
             val bodyEnd = findClosingBrace(source, bodyStart) ?: continue
             val before = source.substring(0, declaration.range.first)
@@ -145,9 +149,11 @@ internal object NativePhpIndexer {
                 .find(prefix)?.value.orEmpty()
             val classAttrs = parseAttributes(trailing, ::resolve)
             val body = source.substring(bodyStart + 1, bodyEnd)
+            val executableBody = executable.substring(bodyStart + 1, bodyEnd)
             val fields = linkedSetOf<String>()
             val relations = linkedMapOf<String, String?>()
             for (property in propertyDeclaration.findAll(body)) {
+                if (executableBody.getOrNull(property.range.first)?.isWhitespace() != false) continue
                 val name = property.groupValues[2]
                 for (attr in parseAttributes(property.groupValues[1], ::resolve)) {
                     when (attr.first) {
@@ -157,9 +163,12 @@ internal object NativePhpIndexer {
                     }
                 }
             }
-            val traitUses = phpUse.findAll(body).filter { it.range.first < body.indexOf("function").let { p ->
-                if (p < 0) body.length else p
-            } }.flatMap { it.groupValues[1].split(',').asSequence() }
+            val traitUses = phpUse.findAll(body).filter {
+                executableBody.getOrNull(it.range.first)?.isWhitespace() == false &&
+                    it.range.first < body.indexOf("function").let { p ->
+                        if (p < 0) body.length else p
+                    }
+            }.flatMap { it.groupValues[1].split(',').asSequence() }
                 .map { resolve(it.trim()) }.toList()
             val parent = declaration.groupValues[3].takeIf { it.isNotBlank() }?.let(::resolve)
             val managed = classAttrs.firstOrNull { it.first == MANAGER_ENTITY }?.second
