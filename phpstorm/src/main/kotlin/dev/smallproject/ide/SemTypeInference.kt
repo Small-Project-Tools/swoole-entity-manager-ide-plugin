@@ -8,9 +8,12 @@ package dev.smallproject.ide
 internal object SemTypeInference {
     private val classReference = Regex("""^\s*(?:(?:managerClass|manager)\s*:\s*)?([\\\w]+)\s*::\s*class\s*$""")
     private val variable = Regex("""^\$(?:(?:this)->)?([A-Za-z_]\w*)$""")
-    private val typedFactory = Regex(
-        """\b(?:[\\\w]*EntityManagerFactory(?:Interface)?|[\\\w]*ManagerFactory(?:Interface)?)\s+\$(\w+)""",
+    private val supportedFactoryTypes = setOf(
+        "Small\\SwooleEntityManager\\Factory\\EntityManagerFactory",
+        "Small\\SwooleEntityManagerBundle\\Factory\\EntityManagerFactory",
+        "Small\\SwooleEntityManagerBundle\\Contract\\EntityManagerFactoryInterface",
     )
+    private val typedVariable = Regex("""(?<![A-Za-z0-9_\\])([\\\w]+)\s+\$(\w+)\b""")
 
     fun factoryResult(source: String, offset: Int, argument: String, receiver: String): String? {
         if (source.length > QueryContextResolver.MAX_SOURCE_LENGTH || offset !in 0..source.length) return null
@@ -24,9 +27,13 @@ internal object SemTypeInference {
 
     internal fun isFactoryReceiver(receiver: String, before: String): Boolean {
         val name = variable.matchEntire(receiver.trim())?.groupValues?.get(1) ?: return false
-        // A typed factory can have any property or variable name.
-        if (typedFactory.findAll(before).any { it.groupValues[1] == name }) return true
-        // Common explicit factory names; do not intercept unrelated get() calls.
+        // Resolve aliased imports before accepting a typed receiver. Other factories
+        // with a similar class name must not contaminate Small type inference.
+        if (typedVariable.findAll(before).any { match ->
+                match.groupValues[2] == name &&
+                    PhpNameResolver.fromSource(before, before.length, match.groupValues[1]) in supportedFactoryTypes
+            }) return true
+        // Conventional untyped names are supported for legacy PHP projects.
         return name.equals("factory", ignoreCase = true) ||
             name.equals("entityManagerFactory", ignoreCase = true) ||
             name.equals("managerFactory", ignoreCase = true)

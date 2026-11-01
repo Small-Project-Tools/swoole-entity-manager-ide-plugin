@@ -43,4 +43,20 @@ class NativeFactoryCompletionTest {
         assertNull(QueryContextResolver.resolve("<?php\n" + "\$cacheFactory->get(Us"))
     }
 
+    @Test fun aliasedFactoryInterfaceOffersManagers() {
+        val source = "<?php\n" +
+            "use Small\\SwooleEntityManagerBundle\\Contract\\EntityManagerFactoryInterface as Locator;\n" +
+            "function run(Locator \$service): void {\n" +
+            "    \$manager = \$service->get(managerClass: Us"
+        assertEquals("manager", QueryContextResolver.resolve(source)?.kind)
+    }
+
+    @Test fun unrelatedTypedFactoryDoesNotOfferManagers() {
+        val source = "<?php\n" +
+            "use Acme\\Other\\EntityManagerFactory;\n" +
+            "function run(EntityManagerFactory \$service): void {\n" +
+            "    \$manager = \$service->get(Us"
+        assertNull(QueryContextResolver.resolve(source))
+    }
+
 }

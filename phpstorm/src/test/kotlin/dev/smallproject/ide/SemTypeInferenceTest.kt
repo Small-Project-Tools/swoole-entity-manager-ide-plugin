@@ -61,4 +61,21 @@ class SemTypeInferenceTest {
         val source = "<?php\nuse Demo\\EntityManager\\UserManager;\n"
         assertNull(SemTypeInference.factoryResult(source, source.length, "UserManager::class", "$" + "cacheFactory"))
     }
+    @Test fun acceptsFactoryInterfaceImportedUnderAlias() {
+        val source = "<?php\n" +
+            "use Demo\\EntityManager\\UserManager;\n" +
+            "use Small\\SwooleEntityManagerBundle\\Contract\\EntityManagerFactoryInterface as Locator;\n" +
+            "function make(Locator \$service): void {\n"
+        assertEquals("\\Demo\\EntityManager\\UserManager",
+            SemTypeInference.factoryResult(source, source.length, "UserManager::class", "\$service"))
+    }
+
+    @Test fun rejectsUnrelatedFactoryWithSimilarTypeName() {
+        val source = "<?php\n" +
+            "use Demo\\EntityManager\\UserManager;\n" +
+            "use Acme\\Other\\EntityManagerFactory;\n" +
+            "function make(EntityManagerFactory \$service): void {\n"
+        assertNull(SemTypeInference.factoryResult(source, source.length, "UserManager::class", "\$service"))
+    }
+
 }
