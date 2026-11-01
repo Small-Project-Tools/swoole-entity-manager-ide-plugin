@@ -17,12 +17,11 @@ data class QueryContext(
 /** Conservative PHP source analysis for query literal completion, without executing PHP. */
 object QueryContextResolver {
     const val MAX_SOURCE_LENGTH = 256 * 1024
-    private val imports = Regex("""(?m)^\s*use\s+([\\\w]+)(?:\s+as\s+(\w+))?\s*;""")
     private val namespace = Regex("""\bnamespace\s+([\\\w]+)\s*;""")
     private val factory = Regex("""\$(\w+)\s*=\s*[^;]*?->\s*get\s*\(\s*(?:(?:managerClass|manager)\s*:\s*)?([\\\w]+)::class""")
-    private val annotated = Regex("""@var\s+([\\\w]+Manager)\s+\$(\w+)""")
-    private val typedManagerParameter = Regex("""(?:\(|,)\s*([\\\w]+Manager)\s+\$(\w+)""")
-    private val typedManagerProperty = Regex("""\b(?:private|protected|public)\s+(?:readonly\s+)?([\\\w]+Manager)\s+\$(\w+)""")
+    private val annotated = Regex("""@var\s+\??([\\\w]+)\s+\$(\w+)""")
+    private val typedManagerParameter = Regex("""(?:\(|,)\s*\??([\\\w]+)\s+\$(\w+)""")
+    private val typedManagerProperty = Regex("""\b(?:private|protected|public)\s+(?:readonly\s+)?\??([\\\w]+)\s+\$(\w+)""")
     private val enclosingManagerClass = Regex("""\bclass\s+(\w+Manager)\b""")
     private val builder = Regex("""\$(\w+)\s*=\s*\$((?:this->)?\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
     private val directBuilder = Regex("""\$((?:this->)?\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
@@ -41,9 +40,10 @@ object QueryContextResolver {
         val literal = named?.groupValues?.get(2) ?: current
         if (role == "manager") {
             val typed = literal.trimStart()
-            val receiver = sourceBeforeCaret.substring(maxOf(0, call.open - 160), call.open)
-            if (!Regex("""(?i)\bfactory\s*->\s*get\s*$""").containsMatchIn(receiver) &&
-                !Regex("""(?i)\w*factory\s*->\s*get\s*$""").containsMatchIn(receiver)) return null
+            val receiverSource = sourceBeforeCaret.substring(maxOf(0, call.open - 160), call.open)
+            val receiver = Regex("""(\$(?:this->)?\w+)\s*->\s*get\s*$""")
+                .find(receiverSource)?.groupValues?.get(1) ?: return null
+            if (!SemTypeInference.isFactoryReceiver(receiver, sourceBeforeCaret.take(call.open))) return null
             if (!Regex("""^[\\\w]*$""").matches(typed)) return null
             return QueryContext(kind = "manager", typedPrefix = typed.substringAfterLast('\\'))
         }
@@ -75,16 +75,9 @@ object QueryContextResolver {
                 .map { it.groupValues[1] }.distinct().sorted().toList()
             return QueryContext(kind = "parameter", parameters = names, typedPrefix = typed)
         }
-        val importMap = imports.findAll(before).associate { m ->
-            val full = m.groupValues[1].trimStart('\\')
-            m.groupValues[2].ifBlank { full.substringAfterLast('\\') } to full
-        }
+        val importMap = PhpNameResolver.imports(before)
         val currentNamespace = namespace.findAll(before).lastOrNull()?.groupValues?.get(1)
-        fun fqcn(value: String): String {
-            val cleaned = value.trimStart('\\')
-            return if (value.startsWith("\\")) cleaned else importMap[cleaned]
-                ?: if ('\\' in cleaned || currentNamespace == null) cleaned else "$currentNamespace\\$cleaned"
-        }
+        fun fqcn(value: String): String = PhpNameResolver.resolve(value, currentNamespace, importMap)
         val managers = mutableMapOf<String, String>()
         for (m in annotated.findAll(before)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
         for (m in typedManagerParameter.findAll(before)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
@@ -163,6 +156,7 @@ object QueryContextResolver {
 
     /** Argument names/positions correspond to the Core 3 method signatures. */
     internal fun methodArgumentRole(method: String, named: String?, index: Int): String? {
+        if (method == "get" && named == "manager") return "manager"
         val signature = when (method) {
             "get" -> listOf("managerClass" to "manager", "new" to "")
             "firstCondition", "andCondition", "orCondition", "xorCondition" ->

@@ -22,7 +22,7 @@ internal object SemTypeInference {
         return "\\" + managerClass
     }
 
-    private fun isFactoryReceiver(receiver: String, before: String): Boolean {
+    internal fun isFactoryReceiver(receiver: String, before: String): Boolean {
         val name = variable.matchEntire(receiver.trim())?.groupValues?.get(1) ?: return false
         // A typed factory can have any property or variable name.
         if (typedFactory.findAll(before).any { it.groupValues[1] == name }) return true

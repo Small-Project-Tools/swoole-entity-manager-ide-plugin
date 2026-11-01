@@ -161,4 +161,28 @@ class QueryContextRegressionTest {
         ).joinToString("\n")
         assertEquals("Demo\\EntityManager\\UserManager", QueryContextResolver.resolve(source)?.manager)
     }
+    @Test fun groupedManagerImportIsRespectedInsideFactoryQuery() {
+        val source = "<?php\n" +
+            "namespace Demo;\n" +
+            "use Vendor\\EntityManager\\{UserManager as AccountManager, CompanyManager};\n" +
+            "\$manager = \$factory->get(manager: AccountManager::class);\n" +
+            "\$query = \$manager->createQueryBuilder('u');\n" +
+            "\$query->getFieldForCondition("
+        val context = QueryContextResolver.resolve(source)
+        assertEquals("Vendor\\EntityManager\\UserManager", context?.manager)
+        assertEquals("u", context?.rootAlias)
+    }
+
+    @Test fun groupedAliasedOperatorImportUsesVisibleName() {
+        val source = "<?php\n" +
+            "use Demo\\EntityManager\\UserManager;\n" +
+            "use Small\\SwooleEntityManager\\QueryBuilder\\RelationalQueryBuilder\\Enum\\{ConditionOperatorType as Op};\n" +
+            "\$manager = \$factory->get(UserManager::class);\n" +
+            "\$query = \$manager->createQueryBuilder('user');\n" +
+            "\$query->where()->firstCondition(\$query->getFieldForCondition('id'), "
+        val context = QueryContextResolver.resolve(source)
+        assertEquals("condition-operator", context?.kind)
+        assertEquals("Op", context?.operatorReference)
+    }
+
 }
