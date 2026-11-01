@@ -134,4 +134,32 @@ class ConditionCompletionRegressionTest {
         assertTrue(index.complete(context).contains("\$query->getFieldForCondition('email')"))
         assertTrue(index.complete(context).contains("null"))
     }
+
+    @Test fun propertyInjectedManagerIsResolvedWithoutFactory() {
+        val source = "<?php\nuse Demo\\EntityManager\\UserManager;\n" +
+            "class Example { private UserManager \$manager;\n" +
+            "  public function work() {\n" +
+            "    \$query = \$this->manager->createQueryBuilder('user');\n" +
+            "    \$query->where()->firstCondition("
+        val context = assertNotNull(QueryContextResolver.resolve(source))
+        assertEquals("condition-field", context.kind)
+        assertEquals("Demo\\EntityManager\\UserManager", context.manager)
+        assertEquals("\$query", context.queryReference)
+        assertTrue(index.complete(context).contains("\$query->getFieldForCondition('email')"))
+    }
+
+    @Test fun promotedReadonlyManagerSupportsFluentCondition() {
+        val source = "<?php\nuse Demo\\EntityManager\\UserManager;\n" +
+            "class Example { public function __construct(private readonly UserManager \$manager) {}\n" +
+            "  public function work() {\n" +
+            "    \$this->manager->createQueryBuilder('user')->where()->firstCondition("
+        val context = assertNotNull(QueryContextResolver.resolve(source))
+        assertEquals("condition-field", context.kind)
+        assertEquals("Demo\\EntityManager\\UserManager", context.manager)
+        assertEquals("\$this->manager->createQueryBuilder('user')", context.queryReference)
+        assertTrue(index.complete(context).contains(
+            "\$this->manager->createQueryBuilder('user')->getFieldForCondition('email')",
+        ))
+    }
+
 }

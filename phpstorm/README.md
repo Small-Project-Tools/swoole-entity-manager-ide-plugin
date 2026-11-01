@@ -12,6 +12,7 @@ Native PhpStorm 2025.1+ plugin for Small Swoole Entity Manager Core 3 and its Sy
 - Completion of manager-class references in a factory call: start typing \`$factory->get(Us\` and press **Ctrl+Space** to insert a qualified \`Manager::class\`.
 - Type inference through PhpStorm's **PhpTypeProvider4**, including \`$factory->get(UserManager::class)\` and the relevant Small query-builder, join and condition types.
 - Imported and aliased class names, grouped imports, local traits, ancestor entity properties, fluent calls, named arguments and stored query builders.
+- Factory-created managers, typed method parameters, and managers injected as typed properties or promoted readonly constructor properties (`$this->manager`).
 - Native bounded indexing: skips vendor, node_modules, build outputs and generated directories, limits files to 2 MiB and 10,000 source files, caches results and completes asynchronously.
 - No PHP process, shell command, Composer autoload or SQL connection is invoked.
 
@@ -32,7 +33,7 @@ Uses Gradle 9.2.1, JDK 21 and the official PhpStorm 2025.1.3 SDK with its bundle
 
 Output: \`build/distributions/small-entity-manager-phpstorm-<version>.zip\`.
 
-Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-3\`.
+Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-4\`.
 
 ## Query example
 
