@@ -81,4 +81,43 @@ class QueryContextRegressionTest {
         assertEquals("owner", context?.joins?.single()?.get("alias"))
     }
 
+
+    @Test fun emptyUnquotedFieldArgumentInsideConditionIsCompletable() {
+        val context = QueryContextResolver.resolve(prefix + """
+            ${'$'}query = ${'$'}manager->createQueryBuilder('person')
+                ->leftJoin('person', 'owner', 'owner')->endJoin();
+            ${'$'}query->where()->firstCondition(${'$'}query->getFieldForCondition(
+        """.trimIndent())
+        assertEquals("field", context?.kind)
+        assertEquals("Sample\\Manager\\PersonManager", context?.manager)
+        assertEquals("person", context?.rootAlias)
+        assertEquals("owner", context?.joins?.single()?.get("alias"))
+        assertEquals("", context?.typedPrefix)
+    }
+
+    @Test fun positionalFieldCompletionWorksBeforeTypingQuotes() {
+        val context = QueryContextResolver.resolve(prefix + """
+            ${'$'}query = ${'$'}manager->createQueryBuilder('person');
+            ${'$'}query->getFieldForCondition(
+        """.trimIndent())
+        assertEquals("field", context?.kind)
+        assertEquals("", context?.typedPrefix)
+    }
+
+    @Test fun namedAndPartiallyTypedUnquotedFieldCompletes() {
+        val context = QueryContextResolver.resolve(prefix + """
+            ${'$'}query = ${'$'}manager->createQueryBuilder('person');
+            ${'$'}query->getFieldForCondition(fieldName: deleted
+        """.trimIndent())
+        assertEquals("field", context?.kind)
+        assertEquals("deleted", context?.typedPrefix)
+    }
+
+    @Test fun dynamicUnquotedPhpExpressionsRemainUnclaimed() {
+        assertNull(QueryContextResolver.resolve(prefix + """
+            ${'$'}query = ${'$'}manager->createQueryBuilder('person');
+            ${'$'}query->getFieldForCondition(${'$'}dynamic
+        """.trimIndent()))
+    }
+
 }

@@ -53,9 +53,16 @@ object QueryContextResolver {
                 if (!Regex("""^[\\\w$>:]*$""").matches(it)) return null
             }
         } else {
-            val quote = literal.trimStart().firstOrNull()
-            if (quote != '\'' && quote != '"') return null
-            literal.trimStart().drop(1).also { if (it.contains(quote)) return null }
+            // A PHP string argument can be completed before the user types its quotes.
+            // Never offer string-literal completion for variables or arbitrary PHP expressions.
+            val argument = literal.trimStart()
+            val quote = argument.firstOrNull()
+            if (quote == '\'' || quote == '"') {
+                argument.drop(1).also { if (it.contains(quote)) return null }
+            } else {
+                if (!Regex("""^(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)?$""").matches(argument)) return null
+                argument
+            }
         }
         val before = sourceBeforeCaret.substring(0, call.open)
         val importMap = imports.findAll(before).associate { m ->

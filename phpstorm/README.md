@@ -33,7 +33,7 @@ Uses Gradle 9.2.1, JDK 21 and the official PhpStorm 2025.1.3 SDK with its bundle
 
 Output: \`build/distributions/small-entity-manager-phpstorm-<version>.zip\`.
 
-Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-5\`.
+Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-6\`.
 
 ## Query example
 
@@ -73,3 +73,7 @@ Passing Kotlin tests and successful plugin packaging verify bytecode compilation
 ## Diagnose missing completions
 
 In PhpStorm use **Tools → Small Entity Manager: Diagnose Completion** while the caret is inside `getFieldForCondition()` or `firstCondition()`. The local diagnostics show the number of indexed managers and entities, the resolved query and alias, and the number of completion candidates; no source code is sent externally.
+
+### Empty arguments
+
+Completion now opens directly after `getFieldForCondition(`, even if no string quote has been typed yet. Choosing a property inserts the complete quoted PHP literal. For a joined property the plugin inserts separate `fieldName` and `entityAlias` arguments, preserving named arguments when they are used.

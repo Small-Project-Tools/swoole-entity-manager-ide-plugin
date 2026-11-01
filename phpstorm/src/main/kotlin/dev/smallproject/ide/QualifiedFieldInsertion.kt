@@ -20,6 +20,17 @@ internal object QualifiedFieldInsertion {
         if (!identifier.matches(alias) || !identifier.matches(field)) return null
         if (startOffset !in 0..source.length || tailOffset !in startOffset..source.length) return null
 
+        // A bare first argument is legal while editing, but the selected completion
+        // must be emitted as fieldName and entityAlias PHP string arguments.
+        val bareArgument = Regex("""getFieldForCondition\s*\(\s*(?:fieldName\s*:\s*)?(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)?$""")
+        val preceding = source.substring(maxOf(0, startOffset - 160), startOffset)
+        if (bareArgument.containsMatchIn(preceding)) {
+            val named = Regex("""getFieldForCondition\s*\(\s*fieldName\s*:\s*(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)?$""")
+                .containsMatchIn(preceding)
+            val aliasParameter = if (named) "entityAlias: '$alias'" else "'$alias'"
+            return Edit(startOffset, tailOffset, "'$field', $aliasParameter")
+        }
+
         val left = source.lastIndexOf('\'', startOffset - 1)
         val right = source.lastIndexOf('"', startOffset - 1)
         val quoteStart = maxOf(left, right)
@@ -39,10 +50,13 @@ internal object QualifiedFieldInsertion {
         }
         val alreadyHasAlias = closingQuote >= 0 &&
             source.substring(closingQuote + 1).trimStart().startsWith(',')
+        val named = Regex("""getFieldForCondition\s*\(\s*fieldName\s*:\s*$""")
+            .containsMatchIn(source.substring(maxOf(0, quoteStart - 120), quoteStart))
+        val aliasParameter = if (named) "entityAlias: $quote$alias$quote" else "$quote$alias$quote"
         val replacement = if (alreadyHasAlias) {
             "$field$quote"
         } else {
-            "$field$quote, $quote$alias$quote"
+            "$field$quote, $aliasParameter"
         }
         val end = if (closingQuote >= 0) closingQuote + 1 else tailOffset
         return Edit(quoteStart + 1, end, replacement)

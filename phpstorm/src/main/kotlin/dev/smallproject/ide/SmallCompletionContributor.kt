@@ -13,7 +13,9 @@ class SmallCompletionContributor : CompletionContributor() {
         ProgressManager.checkCanceled()
         val project = parameters.position.project
         val document = PsiDocumentManager.getInstance(project).getDocument(parameters.originalFile) ?: return
-        val offset = parameters.offset.coerceIn(0, document.textLength)
+        // CompletionParameters.position may contain a synthetic PSI dummy identifier.
+        // The real editor caret offset belongs to the original document.
+        val offset = parameters.editor.caretModel.offset.coerceIn(0, document.textLength)
         if (offset > QueryContextResolver.MAX_SOURCE_LENGTH) return
 
         val source = document.charsSequence.subSequence(0, offset).toString()
@@ -47,20 +49,21 @@ class SmallCompletionContributor : CompletionContributor() {
                         .withTypeText("ConditionField", true)
                 }
             }
-            "field" -> if ('.' in insertText) {
-                // A dotted lookup is display syntax only; insert two valid PHP arguments.
-                item.withTypeText("Small ORM field", true)
+            "field", "alias", "relation", "projection", "parameter" ->
+                item.withTypeText("Small ORM / " + context.kind, true)
                     .withInsertHandler { insertion, _ ->
                         val document = insertion.document
-                        val edit = QualifiedFieldInsertion.plan(
-                            document.text, insertion.startOffset, insertion.tailOffset, insertText,
-                        )
+                        val edit = if (context.kind == "field") {
+                            QualifiedFieldInsertion.plan(document.text, insertion.startOffset, insertion.tailOffset, insertText)
+                                ?: PhpStringInsertion.plan(document.text, insertion.startOffset, insertion.tailOffset, insertText)
+                        } else {
+                            PhpStringInsertion.plan(document.text, insertion.startOffset, insertion.tailOffset, insertText)
+                        }
                         if (edit != null) {
                             document.replaceString(edit.start, edit.end, edit.replacement)
                             insertion.editor.caretModel.moveToOffset(edit.caretOffset)
                         }
                     }
-            } else item.withTypeText("Small ORM field", true)
             "condition-operator" -> {
                 val label = insertText.substringAfterLast('\\')
                 item.withPresentableText(label)
