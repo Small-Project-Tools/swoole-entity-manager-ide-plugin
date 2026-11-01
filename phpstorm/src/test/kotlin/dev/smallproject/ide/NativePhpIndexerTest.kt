@@ -141,7 +141,7 @@ class NativePhpIndexerTest {
             use Bogus\Attributes\Field;
             */
             class Person {
-                #[Field] private string $name;
+                #[Field] private string ${'$'}name;
             }
         """.trimIndent()
         val manager = """
