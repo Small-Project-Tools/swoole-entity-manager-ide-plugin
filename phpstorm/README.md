@@ -10,10 +10,10 @@ Native PhpStorm 2025.1+ plugin for Small Swoole Entity Manager Core 3 and its Sy
 - At `firstCondition()`, `andCondition()`, `orCondition()` and `xorCondition()`, suggest actual `ConditionField` expressions such as `$query->getFieldForCondition('email')`; after the comma, suggest `ConditionOperatorType` enum cases. The dropdown also opens when typing `(` or `,` inside these calls.
 - Supports a stored `$query` or a simple inline `createQueryBuilder()` call. Inline expressions only suggest root entity fields, not joins from another builder instance.
 - Completion of manager-class references in a factory call: start typing \`$factory->get(Us\` and press **Ctrl+Space** to insert a qualified \`Manager::class\`.
-- Type inference through PhpStorm's **PhpTypeProvider4**, including \`$factory->get(UserManager::class)\` and the relevant Small query-builder, join and condition types.
+- Type inference through PhpStorm's **PhpTypeProvider4** for manager factory `get(UserManager::class)`; methods with declared PHP return types retain PhpStorm's native inference.
 - Imported and aliased class names, grouped imports, local traits, ancestor entity properties, fluent calls, named arguments and stored query builders.
 - Factory-created managers, typed method parameters, and managers injected as typed properties or promoted readonly constructor properties (`$this->manager`).
-- Native bounded indexing: skips vendor, node_modules, build outputs and generated directories, limits files to 2 MiB and 10,000 source files, caches results and completes asynchronously.
+- Native bounded indexing: skips vendor, node_modules, build outputs and generated directories, limits files to 2 MiB and 10,000 source files, preloads metadata and serves completion from an in-memory snapshot, with a cancellable initial scan.
 - No PHP process, shell command, Composer autoload or SQL connection is invoked.
 
 ## Installation
@@ -33,7 +33,7 @@ Uses Gradle 9.2.1, JDK 21 and the official PhpStorm 2025.1.3 SDK with its bundle
 
 Output: \`build/distributions/small-entity-manager-phpstorm-<version>.zip\`.
 
-Tagged builds take their version from \`CI_COMMIT_TAG\`. The current candidate version on the main branch is \`1.0.0-RC1\`. A tagged pipeline is required to publish a GitLab Release.
+Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`1.0.0-RC1\`.
 
 ## Query example
 
@@ -60,9 +60,9 @@ For conditions, the correct first argument to \`firstCondition()\` may be a \`Co
 
 ## Tests / stability
 
-Kotlin unit and regression tests exercise native indexing from the PHP fixture files, manager resolution, join aliases, type inference, and avoidance of unrelated factory calls. GitLab builds the plugin with the **real** JetBrains PHP API.
+Kotlin and dynamically generated stress tests cover native indexing, manager resolution (including `$this` inside a manager), join aliases, insertion syntax, type inference, cancellation, concurrency, parser fuzzing, and avoidance of unrelated factory calls. GitLab builds the plugin with the **real** JetBrains PHP API.
 
-The completion contributor is non-blocking; the initial Ctrl+Space invocation may schedule the scan, then reopen completion when data is available. On installations with automatic popups disabled, invoke Ctrl+Space a second time.
+The first completion indexes source directly on the cancellable IDE completion thread if preloading is not finished. All later completions use the memory snapshot immediately. Automatic popup can be disabled in PhpStorm settings; Ctrl+Space triggers manual completion.
 
 This is conservative static source analysis. Files with unsupported dynamic attributes or runtime-computed class names may not yield completions; completion results are refreshed after about 30 seconds.
 
@@ -88,3 +88,15 @@ stale snapshots remain available while the index refreshes in the background.
 
 Completion auto-popup is registered via TypedHandlerDelegate.checkAutoPopup.
 No PHP executable or Composer installation is needed for native completion.
+
+## Release candidate acceptance and external-project validation
+
+The RC acceptance suite covers dynamically generated synthetic metadata,
+large graph navigation, self-manager query builders and cancellation.
+Completion should also be verified in a running IDE after restart.
+The read-only coverage audit can be run against a local external project
+without exporting source or data.
+
+### RC verification
+
+A deterministic Kotlin test suite uses synthetic managers, malformed and partial PHP, joins, inherited metadata, concurrency, cancellation, lexical masking, and release-tag validation. The standalone `ProjectCoverageAudit` main entrypoint can inspect a separate PHP project locally and prints aggregated counts only. Never add external project sources or derived fixtures to this repository.

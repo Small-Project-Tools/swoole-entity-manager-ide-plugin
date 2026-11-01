@@ -7,6 +7,10 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../src/Autoload.php';
+
+use Small\EntityManagerIde\Release\ReleaseTag;
+
 /** Publish or repair a GitLab release using the job token and the Releases API. */
 function requiredEnvironment(string $name): string
 {
@@ -183,7 +187,7 @@ function publishRelease(string $url, string $tag, array $links): void
 
 try {
     $tag = getenv('CI_COMMIT_TAG') ?: requiredEnvironment('RELEASE_TAG');
-    if (preg_match('/^[0-9]+\.[0-9]+\.[0-9]+(?:-dev-[1-9][0-9]*)?$/D', $tag) !== 1) {
+    if (!ReleaseTag::isSupported($tag)) {
         throw new RuntimeException('Release tag must follow project SemVer conventions');
     }
 

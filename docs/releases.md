@@ -54,3 +54,18 @@ The release API checks the release and confirms both links at the end.
 
 Manual repair has an explicit `RELEASE_TAG` guard and is unavailable from
 tag pipelines. All new version tags use `gitlab_release` automatically.
+
+## Release candidate 1.0.0-RC1
+
+Use the exact uppercase tag 1.0.0-RC1, without a v prefix.
+Once the acceptance suite passes, create an annotated tag:
+
+    git tag -a 1.0.0-RC1 -m "release: 1.0.0-RC1"
+    git push origin 1.0.0-RC1
+
+Tagging triggers quality, unit and functional tests, the Gradle SDK build,
+both package uploads and GitLab release creation.
+
+Do not tag before validation on a large independent project.
+Audit external projects strictly in place: never transmit their source
+or generated fixtures to the Small Project GitLab repository.

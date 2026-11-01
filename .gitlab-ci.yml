@@ -45,6 +45,9 @@ phpstorm_build:
     - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/NativePhpIndexer.class'
     - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/NativeIndexSnapshotCache.class'
     - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/SmallProjectIndexStartup.class'
+    - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/PhpExecutableSourceMask.class'
+    - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/ProjectCoverageAudit.class'
+    - 'test "$(grep -R -o "<testcase " build/test-results/test --include="TEST-*.xml" | wc -l)" -ge 600'
     - jar tf build/distributions/*.zip | grep -E '/lib/[^/]+[.]jar$'
     - '! jar tf build/distributions/*.zip | grep -F "core/bin/sem-ide"'
   artifacts:

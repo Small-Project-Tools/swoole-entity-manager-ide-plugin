@@ -20,9 +20,10 @@ object QueryContextResolver {
     private val imports = Regex("""(?m)^\s*use\s+([\\\w]+)(?:\s+as\s+(\w+))?\s*;""")
     private val namespace = Regex("""\bnamespace\s+([\\\w]+)\s*;""")
     private val factory = Regex("""\$(\w+)\s*=\s*[^;]*?->\s*get\s*\(\s*(?:(?:managerClass|manager)\s*:\s*)?([\\\w]+)::class""")
-    private val annotated = Regex("""@var\s+\??([\\\w]+)\s+\$(\w+)""")
-    private val typedManagerParameter = Regex("""(?:\(|,)\s*\??([\\\w]+)\s+\$(\w+)""")
-    private val typedManagerProperty = Regex("""\b(?:private|protected|public)\s+(?:readonly\s+)?\??([\\\w]+)\s+\$(\w+)""")
+    private val annotated = Regex("""@var\s+([\\\w]+Manager)\s+\$(\w+)""")
+    private val typedManagerParameter = Regex("""(?:\(|,)\s*([\\\w]+Manager)\s+\$(\w+)""")
+    private val typedManagerProperty = Regex("""\b(?:private|protected|public)\s+(?:readonly\s+)?([\\\w]+Manager)\s+\$(\w+)""")
+    private val enclosingManagerClass = Regex("""\bclass\s+(\w+Manager)\b""")
     private val builder = Regex("""\$(\w+)\s*=\s*\$((?:this->)?\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
     private val directBuilder = Regex("""\$((?:this->)?\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
     private val methodBeforeParen = Regex("""->\s*([A-Za-z_]\w*)\s*$""")
@@ -65,14 +66,34 @@ object QueryContextResolver {
             }
         }
         val before = sourceBeforeCaret.substring(0, call.open)
-        val importMap = PhpNameResolver.imports(before)
+        if (role == "parameter") {
+            // Parameter names come from placeholders in the current PHP method;
+            // resolving a Manager is unnecessary and breaks chained setParameter() calls.
+            val scope = before.substring(before.lastIndexOf("function ").coerceAtLeast(0))
+            if (!scope.contains("->createQueryBuilder(")) return null
+            val names = placeholder.findAll(scope)
+                .map { it.groupValues[1] }.distinct().sorted().toList()
+            return QueryContext(kind = "parameter", parameters = names, typedPrefix = typed)
+        }
+        val importMap = imports.findAll(before).associate { m ->
+            val full = m.groupValues[1].trimStart('\\')
+            m.groupValues[2].ifBlank { full.substringAfterLast('\\') } to full
+        }
         val currentNamespace = namespace.findAll(before).lastOrNull()?.groupValues?.get(1)
-        fun fqcn(value: String): String =
-            PhpNameResolver.resolve(value, currentNamespace, importMap)
+        fun fqcn(value: String): String {
+            val cleaned = value.trimStart('\\')
+            return if (value.startsWith("\\")) cleaned else importMap[cleaned]
+                ?: if ('\\' in cleaned || currentNamespace == null) cleaned else "$currentNamespace\\$cleaned"
+        }
         val managers = mutableMapOf<String, String>()
         for (m in annotated.findAll(before)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
         for (m in typedManagerParameter.findAll(before)) managers[m.groupValues[2]] = fqcn(m.groupValues[1])
         for (m in typedManagerProperty.findAll(before)) managers["this->" + m.groupValues[2]] = fqcn(m.groupValues[1])
+        // Within a mapped Manager subclass, $this is itself the query factory.
+        // The native index later validates this name against registered ORM managers.
+        enclosingManagerClass.findAll(before).lastOrNull()?.groupValues?.get(1)?.let {
+            managers["this"] = fqcn(it)
+        }
         for (m in factory.findAll(before)) managers[m.groupValues[1]] = fqcn(m.groupValues[2])
         val builders = mutableMapOf<String, Pair<String, String?>>()
         val builderAssignments = mutableMapOf<String, Int>()
@@ -160,18 +181,11 @@ object QueryContextResolver {
     }
 
     private fun activeCall(source: String): OpenCall? {
+        // Work only with executable PHP. A quote or parenthesis inside a comment,
+        // SQL string, heredoc or nowdoc must never change the nesting of a real call.
         val stack = java.util.ArrayDeque<Int>()
-        var quote: Char? = null
-        var escape = false
-        for ((i, c) in source.withIndex()) {
-            if (quote != null) {
-                if (escape) escape = false
-                else if (c == '\\') escape = true
-                else if (c == quote) quote = null
-                continue
-            }
+        for ((i, c) in PhpExecutableSourceMask.mask(source).withIndex()) {
             when (c) {
-                '\'', '"' -> quote = c
                 '(' -> {
                     if (stack.size >= 128) return null
                     stack.addLast(i)
@@ -180,7 +194,8 @@ object QueryContextResolver {
             }
         }
         for (at in stack.toList().asReversed()) {
-            val method = methodBeforeParen.find(source.substring(maxOf(0, at - 96), at))?.groupValues?.get(1) ?: continue
+            val method = methodBeforeParen.find(source.substring(maxOf(0, at - 96), at))
+                ?.groupValues?.get(1) ?: continue
             if (methodArgumentRole(method, null, 0) != null) return OpenCall(method, at)
         }
         return null
