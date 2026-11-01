@@ -59,11 +59,33 @@ phpstorm_build:
   rules:
     - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
 
-tests:
+unit_tests:
   stage: tests
   script:
-    - vendor/bin/pest --testsuite=Unit
-    - vendor/bin/pest --testsuite=Functional
+    - mkdir -p build/test-results
+    - vendor/bin/pest --testsuite=Unit --log-junit build/test-results/unit.xml
+  artifacts:
+    when: always
+    paths:
+      - build/test-results/
+    reports:
+      junit: build/test-results/unit.xml
+    expire_in: 7 days
+  rules:
+    - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
+
+functional_tests:
+  stage: tests
+  script:
+    - mkdir -p build/test-results
+    - vendor/bin/pest --testsuite=Functional --log-junit build/test-results/functional.xml
+  artifacts:
+    when: always
+    paths:
+      - build/test-results/
+    reports:
+      junit: build/test-results/functional.xml
+    expire_in: 7 days
   rules:
     - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
 
