@@ -83,12 +83,12 @@ class NativePhpIndexerTest {
                 namespace Synthetic;
                 use Small\SwooleEntityManager\Entity\Attribute\Field;
                 class Person {
-                    // #[Field] private string $commented;
+                    // #[Field] private string ${'$'}commented;
                     /*
-                     #[Field] private string $blocked;
+                     #[Field] private string ${'$'}blocked;
                     */
-                    private string $text = "#[Field] private string fake;";
-                    #[Field] private string $name;
+                    private string ${'$'}text = "#[Field] private string fake;";
+                    #[Field] private string ${'$'}name;
                 }
             """.trimIndent(),
             "PersonManager.php" to """
@@ -115,10 +115,10 @@ class NativePhpIndexerTest {
                 namespace Synthetic;
                 use Small\SwooleEntityManager\Entity\Attribute\Field;
                 class Person {
-                    private string $template = <<<SQL
+                    private string ${'$'}template = <<<SQL
                     #[Field] private string fake;
                     SQL;
-                    #[Field] private string $real;
+                    #[Field] private string ${'$'}real;
                 }
             """.trimIndent(),
             "Manager.php" to """
