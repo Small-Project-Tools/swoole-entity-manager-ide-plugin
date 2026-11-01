@@ -33,7 +33,7 @@ Uses Gradle 9.2.1, JDK 21 and the official PhpStorm 2025.1.3 SDK with its bundle
 
 Output: \`build/distributions/small-entity-manager-phpstorm-<version>.zip\`.
 
-Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-7\`.
+Tagged builds take their version from \`CI_COMMIT_TAG\`. The current candidate version on the main branch is \`1.0.0-RC1\`. A tagged pipeline is required to publish a GitLab Release.
 
 ## Query example
 

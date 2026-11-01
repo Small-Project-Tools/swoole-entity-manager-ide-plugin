@@ -82,7 +82,7 @@ The `gitlab_release` job publishes both download links in **Deploy → Releases*
 
 Create a tag with `bin/release --dev|--patch|--minor|--major`, or push a tag yourself.
 The version embedded in the PhpStorm plugin matches `CI_COMMIT_TAG` on tagged builds.
-Branch builds use development version `0.2.5-dev-7` until the next tag.
+Current candidate branch builds use `1.0.0-RC1`; release assets are published only by tagged pipelines.
 
 See [docs/releases.md](docs/releases.md).
 
