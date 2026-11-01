@@ -4,11 +4,19 @@ import com.intellij.codeInsight.completion.CompletionContributor
 import com.intellij.codeInsight.completion.CompletionParameters
 import com.intellij.codeInsight.completion.CompletionResultSet
 import com.intellij.codeInsight.lookup.LookupElementBuilder
+import com.intellij.codeInsight.completion.PrioritizedLookupElement
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.psi.PsiDocumentManager
 
 /** Small ORM query completion. The native project scan never runs in the editor read action. */
-class SmallCompletionContributor : CompletionContributor() {
+class SmallCompletionContributor : CompletionContributor(), DumbAware {
+    companion object {
+        private val NATIVE_ONLY_CONTEXTS = setOf(
+            "field", "alias", "relation", "projection", "manager", "condition-field", "condition-operator",
+        )
+    }
+
     override fun fillCompletionVariants(parameters: CompletionParameters, result: CompletionResultSet) {
         ProgressManager.checkCanceled()
         val project = parameters.position.project
@@ -19,11 +27,20 @@ class SmallCompletionContributor : CompletionContributor() {
         if (offset > QueryContextResolver.MAX_SOURCE_LENGTH) return
 
         val source = document.charsSequence.subSequence(0, offset).toString()
-        val context = QueryContextResolver.resolve(source) ?: return
+        val context = QueryContextResolver.resolve(source)
+        SmallCompletionTelemetry.recordContext(context)
+        if (context == null) return
         val completion = result.withPrefixMatcher(context.typedPrefix)
-        for (insertText in SemIdeService.complete(project, parameters.editor, context)) {
+        val candidates = SemIdeService.complete(project, parameters.editor, context)
+        SmallCompletionTelemetry.recordCandidates(candidates.size)
+        for (insertText in candidates) {
             ProgressManager.checkCanceled()
-            completion.addElement(element(context, insertText))
+            completion.addElement(PrioritizedLookupElement.withPriority(element(context, insertText), 1000.0))
+        }
+        // Inside a Small field/alias argument, unrelated PHP globals are misleading.
+        // Stop subsequent generic contributors only when native candidates are available.
+        if (candidates.isNotEmpty() && context.kind in NATIVE_ONLY_CONTEXTS) {
+            completion.stopHere()
         }
     }
 

@@ -33,7 +33,7 @@ Uses Gradle 9.2.1, JDK 21 and the official PhpStorm 2025.1.3 SDK with its bundle
 
 Output: \`build/distributions/small-entity-manager-phpstorm-<version>.zip\`.
 
-Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-6\`.
+Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`0.2.5-dev-7\`.
 
 ## Query example
 
@@ -77,3 +77,14 @@ In PhpStorm use **Tools → Small Entity Manager: Diagnose Completion** while th
 ### Empty arguments
 
 Completion now opens directly after `getFieldForCondition(`, even if no string quote has been typed yet. Choosing a property inserts the complete quoted PHP literal. For a joined property the plugin inserts separate `fieldName` and `entityAlias` arguments, preserving named arguments when they are used.
+
+### Completion popup reliability
+
+The native index is preloaded when the project opens. The first completion also loads
+the index synchronously on IntelliJ's cancellable completion thread if startup indexing
+has not finished. The dropdown no longer depends on a second asynchronous completion
+popup after an empty lookup. Subsequent completions use an immutable memory snapshot;
+stale snapshots remain available while the index refreshes in the background.
+
+Completion auto-popup is registered via TypedHandlerDelegate.checkAutoPopup.
+No PHP executable or Composer installation is needed for native completion.

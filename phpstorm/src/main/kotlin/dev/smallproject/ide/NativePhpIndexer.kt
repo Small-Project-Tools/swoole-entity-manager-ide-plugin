@@ -101,8 +101,9 @@ internal object NativePhpIndexer {
         val relations: Map<String, String?>,
     )
 
-    fun index(files: Map<String, String>): NativeProjectIndex {
+    fun index(files: Map<String, String>, checkCanceled: () -> Unit = {}): NativeProjectIndex {
         val symbols = files.toSortedMap().flatMap { (_, source) ->
+            checkCanceled()
             if (source.length > 2 * 1024 * 1024) emptyList() else symbols(source)
         }.associateBy { it.name }
         val entities = mutableMapOf<String, NativeEntity>()
@@ -250,15 +251,19 @@ internal object NativeProjectScanner {
     private const val MAX_FILES = 10_000
     private const val MAX_BYTES = 2L * 1024 * 1024
 
-    fun scan(root: File): NativeProjectIndex {
+    fun scan(root: File, checkCanceled: () -> Unit = {}): NativeProjectIndex {
+        checkCanceled()
         if (!root.isDirectory) return NativeProjectIndex(emptyMap(), emptyMap())
         val files = linkedMapOf<String, String>()
         Files.walkFileTree(root.toPath(), object : SimpleFileVisitor<Path>() {
-            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult =
-                if (dir != root.toPath() && dir.fileName.toString() in excluded) FileVisitResult.SKIP_SUBTREE
+            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+                checkCanceled()
+                return if (dir != root.toPath() && dir.fileName.toString() in excluded) FileVisitResult.SKIP_SUBTREE
                 else FileVisitResult.CONTINUE
+            }
 
             override fun visitFile(path: Path, attrs: BasicFileAttributes): FileVisitResult {
+                checkCanceled()
                 if (files.size >= MAX_FILES) return FileVisitResult.TERMINATE
                 if (!attrs.isRegularFile || attrs.size() > MAX_BYTES || !path.fileName.toString().endsWith(".php", true)) {
                     return FileVisitResult.CONTINUE
@@ -269,6 +274,7 @@ internal object NativeProjectScanner {
                 return FileVisitResult.CONTINUE
             }
         })
-        return NativePhpIndexer.index(files)
+        checkCanceled()
+        return NativePhpIndexer.index(files, checkCanceled)
     }
 }

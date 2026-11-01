@@ -37,6 +37,8 @@ class SmallCompletionDiagnosticsAction : DumbAwareAction() {
                 appendLine("Root alias: " + (context?.rootAlias ?: "unresolved"))
                 appendLine("Join aliases found: " + (context?.joins?.size ?: 0))
                 appendLine("Candidate completions: " + suggestions.size)
+                appendLine("Completion index preloaded: " + SemIdeService.isIndexed(project))
+                append(SmallCompletionTelemetry.report())
                 if (result.isFailure) appendLine("Index error: " + result.exceptionOrNull()?.javaClass?.simpleName)
                 appendLine()
                 append("If the context is unresolved, invoke basic completion inside a supported method argument.")
