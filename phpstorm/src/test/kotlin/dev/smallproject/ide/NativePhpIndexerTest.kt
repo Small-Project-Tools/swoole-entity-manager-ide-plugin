@@ -87,7 +87,7 @@ class NativePhpIndexerTest {
                     /*
                      #[Field] private string ${'$'}blocked;
                     */
-                    private string ${'$'}text = "#[Field] private string fake;";
+                    private string ${'$'}text = "#[Field] private string ${'$'}fake;";
                     #[Field] private string ${'$'}name;
                 }
             """.trimIndent(),
@@ -116,7 +116,7 @@ class NativePhpIndexerTest {
                 use Small\SwooleEntityManager\Entity\Attribute\Field;
                 class Person {
                     private string ${'$'}template = <<<SQL
-                    #[Field] private string fake;
+                    #[Field] private string ${'$'}fake;
                     SQL;
                     #[Field] private string ${'$'}real;
                 }
@@ -130,6 +130,28 @@ class NativePhpIndexerTest {
         )
         val index = NativePhpIndexer.index(files)
         assertEquals(setOf("real"), index.entities.getValue("Synthetic\\Person").fields)
+    }
+
+    @Test fun phpImportsInsideCommentsCannotShadowActualImports() {
+        val source = """
+            <?php
+            namespace Synthetic;
+            use Small\SwooleEntityManager\Entity\Attribute\Field;
+            /*
+            use Bogus\Attributes\Field;
+            */
+            class Person {
+                #[Field] private string $name;
+            }
+        """.trimIndent()
+        val manager = """
+            <?php
+            namespace Synthetic;
+            use Small\SwooleEntityManager\EntityManager\Attribute\Entity;
+            #[Entity(Person::class)] class PersonManager {}
+        """.trimIndent()
+        val index = NativePhpIndexer.index(mapOf("Person.php" to source, "Manager.php" to manager))
+        assertEquals(setOf("name"), index.entities.getValue("Synthetic\\Person").fields)
     }
 
 }

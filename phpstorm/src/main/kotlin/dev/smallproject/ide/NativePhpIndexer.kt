@@ -164,8 +164,8 @@ internal object NativePhpIndexer {
                 }
             }
             val traitUses = phpUse.findAll(body).filter {
-                executableBody.getOrNull(it.range.first)?.isWhitespace() == false &&
-                    it.range.first < body.indexOf("function").let { p ->
+                executableBody.getOrNull(it.range.first + it.value.indexOf("use")) == 'u' &&
+                    it.range.first < executableBody.indexOf("function").let { p ->
                         if (p < 0) body.length else p
                     }
             }.flatMap { it.groupValues[1].split(',').asSequence() }
@@ -223,7 +223,11 @@ internal object PhpNameResolver {
     private val namespace = Regex("""\bnamespace\s+([\\\w]+)\s*;""")
     fun imports(before: String): Map<String, String> {
         val result = mutableMapOf<String, String>()
+        val executable = PhpExecutableSourceMask.mask(before)
         for (match in names.findAll(before)) {
+            // A multiline PHP comment can contain 'use' at the start of a line.
+            val keywordAt = match.range.first + match.value.indexOf("use")
+            if (executable.getOrNull(keywordAt) != 'u') continue
             val raw = match.groupValues[1].trim()
             if (raw.contains('{')) {
                 val prefix = raw.substringBefore('{').trim().trimEnd('\\')
