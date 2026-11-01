@@ -18,7 +18,7 @@ foreach ([
     '12.35.678',
     '12.35.678-dev-123',
 ] as $tag) {
-    it("accepts release tag {$tag}", static function () use ($tag): void {
+    it("accepts release tag {$tag}", function () use ($tag): void {
         expect(ReleaseTag::isSupported($tag))->toBeTrue();
     });
 }
@@ -42,7 +42,7 @@ foreach ([
     '1.0.0;rm -rf /',
     "1.0.0-RC1\n",
 ] as $tag) {
-    it('rejects unsupported release tag '.bin2hex($tag), static function () use ($tag): void {
+    it('rejects unsupported release tag '.bin2hex($tag), function () use ($tag): void {
         expect(ReleaseTag::isSupported($tag))->toBeFalse();
     });
 }
