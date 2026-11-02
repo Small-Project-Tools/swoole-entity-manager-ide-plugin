@@ -1,149 +1,33 @@
 stages:
-  - quality
-  - tests
-  - build
-  - deploy
   - release
 
-default:
-  image: composer:2
+publish_rc4_tag:
+  image: alpine:3.20
+  stage: release
   before_script:
-    - composer install --prefer-dist --no-interaction --no-progress
-
-quality:
-  stage: quality
+    - apk add --no-cache git curl ca-certificates
   script:
-    - php bin/self-test
-    - find src tests bin -type f \( -name '*.php' -o -name 'sem-ide' -o -name 'self-test' \) -exec php -l {} \;
-    - vendor/bin/phpstan analyse --no-progress
-    - php bin/apply-copyright.php --check
+    - |
+      set -eu
+      test "$CI_COMMIT_BRANCH" = "release/1.0.0-rc4"
+      expected="bf0e13b04ac78b6442c35c00a0746ce135eaab8f"
+      actual="$(git ls-remote origin refs/heads/main | cut -f1)"
+      if [ "$actual" != "$expected" ]; then
+        echo "main moved: refusing to publish an unreviewed commit" >&2
+        exit 1
+      fi
+      if git ls-remote origin refs/tags/1.0.0-RC4 | grep -q .; then
+        echo "Tag 1.0.0-RC4 already exists: refusing to overwrite" >&2
+        exit 1
+      fi
+      payload="$(printf '{"tag_name":"1.0.0-RC4","ref":"%s","tag_message":"release: 1.0.0-RC4","name":"Small Entity Manager IDE 1.0.0-RC4","description":"Automatic release for 1.0.0-RC4. Package assets are attached by the tag pipeline."}' "$expected")"
+      status="$(curl --silent --show-error --output /tmp/rc4-release-response.json --write-out '%{http_code}' --request POST --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --header 'Content-Type: application/json' --data "$payload" "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases")"
+      if [ "$status" != "201" ]; then
+        echo "Release creation returned HTTP $status" >&2
+        cat /tmp/rc4-release-response.json >&2
+        exit 1
+      fi
+      echo "Annotated tag 1.0.0-RC4 and release created at $expected"
+      git ls-remote --tags origin refs/tags/1.0.0-RC4
   rules:
-    - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
-
-phpstorm_build:
-  image: gradle:9.2.1-jdk21
-  stage: build
-  before_script: []
-  interruptible: true
-  retry:
-    max: 1
-    when:
-      - runner_system_failure
-      - stuck_or_timeout_failure
-  variables:
-    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-user-home"
-  script:
-    - df -h .
-    - cd phpstorm
-    - gradle --no-daemon --max-workers=2 --console=plain --stacktrace verifyPluginConfiguration test buildPlugin verifyPluginStructure
-    - ls -lh build/distributions/*.zip
-    - jar tf build/libs/*-base.jar | grep -F 'META-INF/plugin.xml'
-    - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/SmallCompletionContributor.class'
-    - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/PhpStringInsertion.class'
-    - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/SmallPhpTypeProvider.class'
-    - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/NativePhpIndexer.class'
-    - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/NativeIndexSnapshotCache.class'
-    - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/SmallProjectIndexStartup.class'
-    - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/PhpExecutableSourceMask.class'
-    - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/ProjectCoverageAudit.class'
-    - 'test "$(grep -R -o "<testcase " build/test-results/test --include="TEST-*.xml" | wc -l)" -ge 600'
-    - jar tf build/distributions/*.zip | grep -E '/lib/[^/]+[.]jar$'
-    - '! jar tf build/distributions/*.zip | grep -F "core/bin/sem-ide"'
-  artifacts:
-    when: always
-    paths:
-      - phpstorm/build/distributions/*.zip
-      - phpstorm/build/test-results/test/
-    expire_in: 7 days
-  rules:
-    - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
-
-unit_tests:
-  stage: tests
-  script:
-    - mkdir -p build/test-results
-    - vendor/bin/pest --testsuite=Unit --log-junit build/test-results/unit.xml
-  artifacts:
-    when: always
-    paths:
-      - build/test-results/
-    reports:
-      junit: build/test-results/unit.xml
-    expire_in: 7 days
-  rules:
-    - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
-
-functional_tests:
-  stage: tests
-  script:
-    - mkdir -p build/test-results
-    - vendor/bin/pest --testsuite=Functional --log-junit build/test-results/functional.xml
-  artifacts:
-    when: always
-    paths:
-      - build/test-results/
-    reports:
-      junit: build/test-results/functional.xml
-    expire_in: 7 days
-  rules:
-    - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
-
-build:
-  stage: build
-  script:
-    - mkdir -p dist
-    - tar --exclude=vendor --exclude=dist --exclude=.git -czf "dist/small-entity-manager-ide-core-${CI_COMMIT_TAG}.tar.gz" .
-  artifacts:
-    paths: [dist/]
-  rules:
-    - if: '$CI_COMMIT_TAG'
-
-deploy:
-  stage: deploy
-  needs:
-    - job: build
-      artifacts: true
-    - job: phpstorm_build
-      artifacts: true
-  before_script: []
-  script:
-    - 'test -f "dist/small-entity-manager-ide-core-${CI_COMMIT_TAG}.tar.gz"'
-    - 'test -f "phpstorm/build/distributions/small-entity-manager-phpstorm-${CI_COMMIT_TAG}.zip"'
-    - >-
-      curl --fail --show-error --retry 3
-      --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
-      --upload-file "dist/small-entity-manager-ide-core-${CI_COMMIT_TAG}.tar.gz"
-      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/small-entity-manager-ide-core/${CI_COMMIT_TAG}/small-entity-manager-ide-core-${CI_COMMIT_TAG}.tar.gz"
-    - >-
-      curl --fail --show-error --retry 3
-      --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
-      --upload-file "phpstorm/build/distributions/small-entity-manager-phpstorm-${CI_COMMIT_TAG}.zip"
-      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/small-entity-manager-phpstorm/${CI_COMMIT_TAG}/small-entity-manager-phpstorm-${CI_COMMIT_TAG}.zip"
-  rules:
-    - if: '$CI_COMMIT_TAG'
-
-gitlab_release:
-  stage: release
-  image: composer:2
-  before_script: []
-  needs:
-    - job: deploy
-      artifacts: false
-  script:
-    - php bin/publish-release.php
-  rules:
-    - if: '$CI_COMMIT_TAG'
-
-# Repair metadata for an already-built tag without moving the tag or
-# republishing immutable package artifacts. Run a pipeline on main with
-# RELEASE_TAG=0.2.0 (or the required existing version).
-repair_release:
-  stage: release
-  image: composer:2
-  before_script: []
-  needs: []
-  script:
-    - php bin/publish-release.php
-  rules:
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $RELEASE_TAG'
-      when: manual
+    - if: '$CI_COMMIT_BRANCH == "release/1.0.0-rc4"'
