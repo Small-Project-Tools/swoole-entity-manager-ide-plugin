@@ -38,7 +38,24 @@ intellijPlatform {
     }
 }
 
-tasks.test { useJUnitPlatform() }
+tasks.test {
+    useJUnitPlatform()
+
+    // JetBrains test fixtures may retain non-daemon background workers. A
+    // bounded number of test classes per JVM prevents one leaked worker from
+    // keeping the entire CI suite alive after the tests have completed.
+    maxParallelForks = 1
+    forkEvery = 5
+    maxHeapSize = "640m"
+    jvmArgs("-XX:MaxMetaspaceSize=320m", "-XX:ActiveProcessorCount=2")
+    systemProperty("junit.jupiter.execution.timeout.test.method.default", "180s")
+
+    testLogging {
+        // Explicit test names make a blocked CI job diagnosable. Logs are kept
+        // even when the Gradle job ultimately times out.
+        events("started", "failed")
+    }
+}
 
 tasks.named<Zip>("buildPlugin") {
     archiveFileName = "small-entity-manager-phpstorm-" + project.version + ".zip"
