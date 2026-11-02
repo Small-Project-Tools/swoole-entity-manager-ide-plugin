@@ -18,16 +18,22 @@ class SmallPhpTypeProvider : PhpTypeProvider4 {
     override fun getType(element: PsiElement): PhpType? {
         val reference = element as? MethodReference ?: return null
         val name = reference.name ?: return null
-        // Other Small methods have native PHP return type declarations.
-        // Claiming them by a file-wide heuristic polluted unrelated method inference.
-        if (name != "get") return null
+        val receiver = reference.classReference?.text ?: return null
+        if (name != "get" && (receiver != "\$this" || reference.parameters.isNotEmpty())) return null
         val file = element.containingFile ?: return null
         val source = file.text
         val offset = element.textOffset
-        val receiver = reference.classReference?.text ?: return null
-        val argument = SemTypeInference.managerArgument(reference.parameters.map { it.text }) ?: return null
-        val fqcn = SemTypeInference.factoryResult(source, offset, argument, receiver) ?: return null
-        return PhpType().add(fqcn)
+        val concrete = if (name == "get") {
+            val argument = SemTypeInference.managerArgument(reference.parameters.map { it.text })
+                ?: return null
+            SemTypeInference.factoryResult(source, offset, argument, receiver)
+        } else {
+            // Only a locally defined zero-argument $this->accessor() that
+            // provably returns the same concrete manager in every return.
+            // Never infer a type for arbitrary methods in other classes.
+            SemManagerAccessorInference.infer(source, offset, name)
+        } ?: return null
+        return PhpType().add(concrete)
     }
 
     override fun complete(expression: String, project: Project): PhpType? = null
