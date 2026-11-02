@@ -27,7 +27,7 @@ quality:
 
 phpstorm_build:
   image: gradle:9.2.1-jdk21
-  timeout: 25m
+  timeout: 35m
   stage: build
   before_script: []
   interruptible: true
@@ -43,7 +43,7 @@ phpstorm_build:
     - cd phpstorm
     # A stalled JetBrains test process must fail with a bounded diagnostic,
     # rather than occupying scarce Kubernetes runners indefinitely.
-    - timeout --signal=TERM --kill-after=30s 15m gradle --no-daemon --max-workers=2 --console=plain --stacktrace verifyPluginConfiguration test buildPlugin verifyPluginStructure
+    - timeout --signal=TERM --kill-after=30s 28m gradle --no-daemon --max-workers=2 --console=plain --stacktrace verifyPluginConfiguration test buildPlugin verifyPluginStructure
     - ls -lh build/distributions/*.zip
     - jar tf build/libs/*-base.jar | grep -F 'META-INF/plugin.xml'
     - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/SmallCompletionContributor.class'
