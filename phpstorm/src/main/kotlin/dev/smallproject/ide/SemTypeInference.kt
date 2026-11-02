@@ -33,8 +33,10 @@ internal object SemTypeInference {
      */
     fun managerArgumentFromParameterList(parameterList: String): String? {
         val raw = parameterList.trim()
-        if (raw.length < 2 || raw.first() != '(' || raw.last() != ')') return null
-        val inside = raw.substring(1, raw.length - 1)
+        if (raw.isEmpty()) return null
+        val wrapped = raw.startsWith('(')
+        if (wrapped != raw.endsWith(')')) return null
+        val inside = if (wrapped) raw.substring(1, raw.length - 1) else raw
         val parts = mutableListOf<String>()
         var start = 0
         var nesting = 0

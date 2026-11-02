@@ -140,6 +140,8 @@ class SemTypeInferenceTest {
             ))
         assertEquals("UserManager::class",
             SemTypeInference.managerArgumentFromParameterList("(UserManager::class)"))
+        assertEquals("UserManager::class",
+            SemTypeInference.managerArgumentFromParameterList("UserManager::class"))
         assertEquals("managerClass: UserManager::class",
             SemTypeInference.managerArgumentFromParameterList(
                 "(\nnew: true,\nmanagerClass: UserManager::class,\n)"
@@ -147,7 +149,7 @@ class SemTypeInferenceTest {
     }
 
     @Test fun malformedOrAmbiguousFactoryArgumentListsFailClosed() {
-        listOf("", "UserManager::class", "(", "(managerClass: UserManager::class",
+        listOf("", "(", "(managerClass: UserManager::class",
             "(managerClass: UserManager::class, new: [1, 2)",
             "(new: true, managerClass: UserManager::class, manager: AnotherManager::class)",
             "(managerClass: \"UserManager\")", "(new: true)",
