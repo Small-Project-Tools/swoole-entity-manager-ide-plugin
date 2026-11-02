@@ -7,8 +7,8 @@ package dev.smallproject.ide
  */
 internal object SemTypeInference {
     private val classReference = Regex("""^\s*(?:(?:managerClass|manager)\s*:\s*)?([\\\w]+)\s*::\s*class\s*$""")
-    private val namedManager = Regex("""^\s*(?:managerClass|manager)\s*:""")
-    private val namedArgument = Regex("""^\s*\w+\s*:""")
+    private val namedManager = Regex("""^\s*(?:managerClass|manager)\s*:(?!:)""")
+    private val namedArgument = Regex("""^\s*[A-Za-z_]\w*\s*:(?!:)""")
     private val variable = Regex("""^\$(?:(?:this)->)?([A-Za-z_]\w*)$""")
     private val supportedFactoryTypes = setOf(
         "Small\\SwooleEntityManager\\Factory\\EntityManagerFactory",
