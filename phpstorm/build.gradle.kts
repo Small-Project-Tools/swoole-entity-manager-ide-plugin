@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.smallproject"
-version = providers.environmentVariable("CI_COMMIT_TAG").orElse("1.0.0-RC4").get().ifBlank { "1.0.0-RC4" }
+version = providers.environmentVariable("CI_COMMIT_TAG").orElse("1.0.0-RC5").get().ifBlank { "1.0.0-RC5" }
 
 repositories {
     mavenCentral()

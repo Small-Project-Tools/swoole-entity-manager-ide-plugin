@@ -1,7 +1,7 @@
 <idea-plugin>
   <id>dev.smallproject.entitymanager</id>
   <name>Small Entity Manager</name>
-  <version>1.0.0-RC4</version>
+  <version>1.0.0-RC5</version>
   <idea-version since-build="251"/>
   <vendor url="https://git.small-project.dev/pub/ide/small-entity-manager-ide-core">Small Project</vendor>
   <description><![CDATA[Native PHP-free completion and PhpStorm type inference for Small Swoole Entity Manager fields, relations, aliases, and manager factories.]]></description>

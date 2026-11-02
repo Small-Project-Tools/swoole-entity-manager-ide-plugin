@@ -78,4 +78,21 @@ class SemTypeInferenceTest {
         assertNull(SemTypeInference.factoryResult(source, source.length, "UserManager::class", "\$service"))
     }
 
+
+    @Test fun reorderedNamedArgumentsResolveConcreteManager() {
+        val source = "<?php\nuse Demo\\EntityManager\\UserManager;\n"
+        val argument = SemTypeInference.managerArgument(
+            listOf("new: true", "managerClass: UserManager::class"))
+        assertEquals("managerClass: UserManager::class", argument)
+        assertEquals("\\Demo\\EntityManager\\UserManager",
+            SemTypeInference.factoryResult(source, source.length, argument!!, "\$factory"))
+        assertNull(SemTypeInference.managerArgument(listOf("new: true")))
+    }
+
+    @Test fun declaredForeignFactoryCannotInferSmallManager() {
+        val source = "<?php\nuse Demo\\EntityManager\\UserManager;\n" +
+            "use Foreign\\OtherFactory;\nfunction test(OtherFactory \$factory): void {}\n"
+        assertNull(SemTypeInference.factoryResult(
+            source, source.length, "UserManager::class", "\$factory"))
+    }
 }

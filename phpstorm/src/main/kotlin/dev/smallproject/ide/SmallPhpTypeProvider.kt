@@ -24,8 +24,8 @@ class SmallPhpTypeProvider : PhpTypeProvider4 {
         val file = element.containingFile ?: return null
         val source = file.text
         val offset = element.textOffset
-        val argument = reference.parameters.firstOrNull()?.text ?: return null
         val receiver = reference.classReference?.text ?: return null
+        val argument = SemTypeInference.managerArgument(reference.parameters.map { it.text }) ?: return null
         val fqcn = SemTypeInference.factoryResult(source, offset, argument, receiver) ?: return null
         return PhpType().add(fqcn)
     }
