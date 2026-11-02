@@ -95,4 +95,19 @@ class SemTypeInferenceTest {
         assertNull(SemTypeInference.factoryResult(
             source, source.length, "UserManager::class", "\$factory"))
     }
+
+    @Test fun matrixOfCoreAndBundleFactoryReturns() {
+        val factories = listOf("Small\\SwooleEntityManager\\Factory\\EntityManagerFactory", "Small\\SwooleEntityManagerBundle\\Factory\\EntityManagerFactory", "Small\\SwooleEntityManagerBundle\\Contract\\EntityManagerFactoryInterface")
+        val managers = listOf("UserManager", "CatalogManager", "OrderManager", "InventoryManager")
+        for (factory in factories) for (manager in managers) {
+            val source = "<?php\\nuse Synthetic\\\\Manager\\\\$manager;\\n" + "/** @var \\\\$factory \\$locator */\\n"
+            for (arg in listOf("$manager::class", "manager: $manager::class", "managerClass: $manager::class")) {
+                assertEquals("\\\\Synthetic\\\\Manager\\\\$manager", SemTypeInference.factoryResult(source, source.length, arg, "\\$locator"))
+            }
+        }
+    }
+    @Test fun ambiguousFactoryArgumentsAreNotTyped() {
+        assertNull(SemTypeInference.managerArgument(listOf("UserManager::class", "managerClass: OrderManager::class")))
+        assertNull(SemTypeInference.managerArgument(listOf("new: true")))
+    }
 }

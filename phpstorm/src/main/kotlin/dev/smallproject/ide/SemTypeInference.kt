@@ -19,7 +19,7 @@ internal object SemTypeInference {
 
     fun managerArgument(arguments: List<String>): String? {
         val named = arguments.filter { namedManager.containsMatchIn(it) }
-        if (named.size > 1) return null
+        if (named.size > 1 || (named.isNotEmpty() && arguments.firstOrNull()?.let { !namedArgument.containsMatchIn(it) } == true)) return null
         return named.singleOrNull() ?: arguments.firstOrNull()?.takeUnless {
             namedArgument.containsMatchIn(it)
         }
@@ -43,7 +43,7 @@ internal object SemTypeInference {
             .filter { it.groupValues[2] == name }
             .mapNotNull { PhpNameResolver.fromSource(before, before.length, it.groupValues[1]) }
             .toList()
-        if (types.isNotEmpty()) return types.any { it in supportedFactoryTypes }
+        if (types.isNotEmpty()) return types.last() in supportedFactoryTypes
         // Conventional untyped names are supported for legacy PHP projects.
         return name.equals("factory", ignoreCase = true) ||
             name.equals("entityManagerFactory", ignoreCase = true) ||
