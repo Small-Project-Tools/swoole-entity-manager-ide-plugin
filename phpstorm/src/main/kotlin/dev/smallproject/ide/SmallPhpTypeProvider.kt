@@ -36,7 +36,10 @@ class SmallPhpTypeProvider : PhpTypeProvider4 {
         return PhpType().add(concrete)
     }
 
-    // Tested with the PhpStorm 2026.2 inspector: otherwise the abstract\n    // native get() return is merged into the concrete manager type.\n    // Unsupported methods return null and keep the native inference.\n    override fun interceptsNativeSignature(): Boolean = true
+    // Tested with the PhpStorm 2026.2 inspector: otherwise the abstract
+    // native get() return is merged into the concrete manager type.
+    // Unsupported methods return null and keep the native inference.
+    override fun interceptsNativeSignature(): Boolean = true
 
     override fun complete(expression: String, project: Project): PhpType? = null
 
