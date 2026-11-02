@@ -97,17 +97,35 @@ class SemTypeInferenceTest {
     }
 
     @Test fun matrixOfCoreAndBundleFactoryReturns() {
-        val factories = listOf("Small\\SwooleEntityManager\\Factory\\EntityManagerFactory", "Small\\SwooleEntityManagerBundle\\Factory\\EntityManagerFactory", "Small\\SwooleEntityManagerBundle\\Contract\\EntityManagerFactoryInterface")
+        val factories = listOf(
+            "Small\\SwooleEntityManager\\Factory\\EntityManagerFactory",
+            "Small\\SwooleEntityManagerBundle\\Factory\\EntityManagerFactory",
+            "Small\\SwooleEntityManagerBundle\\Contract\\EntityManagerFactoryInterface",
+        )
         val managers = listOf("UserManager", "CatalogManager", "OrderManager", "InventoryManager")
         for (factory in factories) for (manager in managers) {
-            val source = "<?php\\nuse Synthetic\\\\Manager\\\\$manager;\\n" + "/** @var \\\\$factory \\$locator */\\n"
-            for (arg in listOf("$manager::class", "manager: $manager::class", "managerClass: $manager::class")) {
-                assertEquals("\\\\Synthetic\\\\Manager\\\\$manager", SemTypeInference.factoryResult(source, source.length, arg, "\\$locator"))
+            val source = "<?php\nuse Synthetic\\Manager\\$manager;\n" +
+                "/** @var \\$factory \$locator */\n"
+            for (argument in listOf(
+                "$manager::class",
+                "manager: $manager::class",
+                "managerClass: $manager::class",
+            )) {
+                assertEquals(
+                    "\\Synthetic\\Manager\\$manager",
+                    SemTypeInference.factoryResult(source, source.length, argument, "\$locator"),
+                )
             }
         }
     }
+
     @Test fun ambiguousFactoryArgumentsAreNotTyped() {
-        assertNull(SemTypeInference.managerArgument(listOf("UserManager::class", "managerClass: OrderManager::class")))
+        assertNull(SemTypeInference.managerArgument(listOf(
+            "UserManager::class", "managerClass: OrderManager::class",
+        )))
         assertNull(SemTypeInference.managerArgument(listOf("new: true")))
+        assertNull(SemTypeInference.managerArgument(listOf(
+            "managerClass: UserManager::class", "manager: OrderManager::class",
+        )))
     }
 }
