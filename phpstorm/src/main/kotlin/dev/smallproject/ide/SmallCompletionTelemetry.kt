@@ -9,6 +9,10 @@ internal object SmallCompletionTelemetry {
     private val matchedContexts = AtomicLong()
     private val contributedCandidates = AtomicInteger()
 
+    private val autoPopupRequests = AtomicLong()
+    private val autoPopupOverrides = AtomicLong()
+
+    @Volatile private var lastAutoPopupRequest = "none"
     @Volatile private var mostRecentContext = "unresolved"
 
     fun recordContext(context: QueryContext?) {
@@ -21,10 +25,22 @@ internal object SmallCompletionTelemetry {
         contributedCandidates.set(count)
     }
 
+    fun recordAutoPopupRequest(kind: String, character: Char) {
+        autoPopupRequests.incrementAndGet()
+        lastAutoPopupRequest = "$kind ($character)"
+    }
+
+    fun recordAutoPopupOverride() {
+        autoPopupOverrides.incrementAndGet()
+    }
+
     fun report(): String = buildString {
         appendLine("Contributor invocations: " + invocations.get())
         appendLine("Resolved invocation contexts: " + matchedContexts.get())
         appendLine("Last contributor context: " + mostRecentContext)
         appendLine("Last contributed candidates: " + contributedCandidates.get())
+        appendLine("Auto-popup requests: " + autoPopupRequests.get())
+        appendLine("Last auto-popup request: " + lastAutoPopupRequest)
+        appendLine("Bare qualified alias overrides: " + autoPopupOverrides.get())
     }
 }

@@ -24,7 +24,8 @@ class SmallCompletionAutoPopup : TypedHandlerDelegate() {
         val offset = editor.caretModel.offset
         if (offset > QueryContextResolver.MAX_SOURCE_LENGTH || offset > document.textLength) return false
         val sourceBeforeCaret = document.charsSequence.subSequence(0, offset).toString()
-        if (contextForTypedText(sourceBeforeCaret, c) == null) return false
+        val context = contextForTypedText(sourceBeforeCaret, c) ?: return false
+        SmallCompletionTelemetry.recordAutoPopupRequest(context.kind, c)
         AutoPopupController.getInstance(project).scheduleAutoPopup(editor)
         return true
     }
