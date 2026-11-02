@@ -16,9 +16,9 @@ class SemManagerAccessorInferenceTest {
             use Synthetic\Manager\OrderManager;
             use Small\SwooleEntityManagerBundle\Contract\EntityManagerFactoryInterface as Locator;
             class Controller {
-                public function __construct(private readonly Locator $factory) {}
+                public function __construct(private readonly Locator ${'$'}factory) {}
                 $body
-                public function run() { $this->$accessor(); }
+                public function run() { ${'$'}this->$accessor(); }
             }
         """.trimIndent()
         return SemManagerAccessorInference.infer(
@@ -30,7 +30,7 @@ class SemManagerAccessorInferenceTest {
             "managerClass: Catalog::class", "new: true, managerClass: Catalog::class")) {
             assertEquals(expected, inferred("""
                 private function catalogManager(): \Small\SwooleEntityManager\EntityManager\AbstractManager {
-                    return $this->factory->get($arg);
+                    return ${'$'}this->factory->get($arg);
                 }
             """.trimIndent()))
         }
@@ -39,57 +39,57 @@ class SemManagerAccessorInferenceTest {
     @Test fun assignmentAndDelegationReturnConcreteManager() {
         assertEquals(expected, inferred("""
             private function catalogManager() {
-                $result = $this->factory->get(Catalog::class);
-                return $result;
+                ${'$'}result = ${'$'}this->factory->get(Catalog::class);
+                return ${'$'}result;
             }
         """.trimIndent()))
         assertEquals(expected, inferred("""
-            private function catalogManager() { return $this->delegateManager(); }
-            private function delegateManager() { return $this->factory->get(Catalog::class); }
+            private function catalogManager() { return ${'$'}this->delegateManager(); }
+            private function delegateManager() { return ${'$'}this->factory->get(Catalog::class); }
         """.trimIndent()))
     }
 
     @Test fun matchingBranchesAreSafeButMixedOrNullAreNot() {
         assertEquals(expected, inferred("""
             private function catalogManager() {
-                if ($condition) return $this->factory->get(Catalog::class);
-                return $this->factory->get(Catalog::class);
+                if (${'$'}condition) return ${'$'}this->factory->get(Catalog::class);
+                return ${'$'}this->factory->get(Catalog::class);
             }
         """.trimIndent()))
         assertNull(inferred("""
             private function catalogManager() {
-                if ($condition) return $this->factory->get(OrderManager::class);
-                return $this->factory->get(Catalog::class);
+                if (${'$'}condition) return ${'$'}this->factory->get(OrderManager::class);
+                return ${'$'}this->factory->get(Catalog::class);
             }
         """.trimIndent()))
         assertNull(inferred("""
             private function catalogManager(): ?object {
-                if ($condition) return null;
-                return $this->factory->get(Catalog::class);
+                if (${'$'}condition) return null;
+                return ${'$'}this->factory->get(Catalog::class);
             }
         """.trimIndent()))
     }
 
     @Test fun foreignFactoryAndReassignedVariableFailClosed() {
         assertNull(inferred("""
-            private function catalogManager() { return $this->cache->get(Catalog::class); }
+            private function catalogManager() { return ${'$'}this->cache->get(Catalog::class); }
         """.trimIndent()))
         assertNull(inferred("""
             private function catalogManager() {
-                $result = $this->factory->get(Catalog::class);
-                $result = null;
-                return $result;
+                ${'$'}result = ${'$'}this->factory->get(Catalog::class);
+                ${'$'}result = null;
+                return ${'$'}result;
             }
         """.trimIndent()))
     }
 
     @Test fun recursionCommentsAndMissingMethodsFailClosed() {
         assertNull(inferred("""
-            private function catalogManager() { return $this->delegateManager(); }
-            private function delegateManager() { return $this->catalogManager(); }
+            private function catalogManager() { return ${'$'}this->delegateManager(); }
+            private function delegateManager() { return ${'$'}this->catalogManager(); }
         """.trimIndent()))
         assertNull(inferred("""
-            /* private function catalogManager() { return $this->factory->get(Catalog::class); } */
+            /* private function catalogManager() { return ${'$'}this->factory->get(Catalog::class); } */
             private function unrelated() { return null; }
         """.trimIndent()))
         assertNull(inferred("private function unrelated() { return null; }"))
@@ -100,10 +100,10 @@ class SemManagerAccessorInferenceTest {
             <?php
             namespace Synthetic;
             use Synthetic\Manager\CatalogManager;
-            class First { function catalogManager() { return $factory->get(CatalogManager::class); } }
+            class First { function catalogManager() { return ${'$'}factory->get(CatalogManager::class); } }
             class Second {
                 function catalogManager() { return null; }
-                function run() { $this->catalogManager(); }
+                function run() { ${'$'}this->catalogManager(); }
             }
         """.trimIndent()
         assertNull(SemManagerAccessorInference.infer(
