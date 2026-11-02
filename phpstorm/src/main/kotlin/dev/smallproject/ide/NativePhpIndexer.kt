@@ -22,8 +22,16 @@ internal data class NativeProjectIndex(
             val type = context.operatorReference ?: return emptyList()
             return ConditionOperatorCatalog.cases.map { "$type::$it" }
         }
-        val manager = managers.keys.firstOrNull { it.equals(context.manager?.trimStart('\\'), ignoreCase = true) }
-            ?: return emptyList()
+        val requested = context.manager?.trimStart('\\') ?: return emptyList()
+        val manager = managers.keys.firstOrNull { it.equals(requested, ignoreCase = true) }
+            ?: if ('\\' !in requested) {
+                // A short hint from an inherited controller accessor is safe
+                // only if exactly one indexed manager has that basename.
+                managers.keys.filter {
+                    it.substringAfterLast('\\').equals(requested, ignoreCase = true)
+                }.singleOrNull()
+            } else null
+        if (manager == null) return emptyList()
         val root = context.rootAlias ?: managers[manager]?.substringAfterLast('\\')?.replaceFirstChar { it.lowercase() }
             ?: return emptyList()
         val aliases = mutableMapOf(root to managers.getValue(manager))

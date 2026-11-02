@@ -24,12 +24,36 @@ object QueryContextResolver {
     private val typedManagerProperty = Regex("""\b(?:private|protected|public)\s+(?:readonly\s+)?\??([\\\w]+)\s+\$(\w+)""")
     private val enclosingClass = Regex("""\bclass\s+([A-Za-z_]\w*)\b""")
     private val functionDeclaration = Regex("""\bfunction\s+(?:&\s*)?\w*\s*\(""")
-    private val builder = Regex("""\$(\w+)\s*=\s*\$((?:this->)?\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
-    private val directBuilder = Regex("""\$((?:this->)?\w+)\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
+    private val builder = Regex("""\$(\w+)\s*=\s*\$((?:this->)?\w+)(\s*\(\s*\))?\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
+    private val directBuilder = Regex("""\$((?:this->)?\w+)(\s*\(\s*\))?\s*->\s*(createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(""")
     private val methodBeforeParen = Regex("""->\s*([A-Za-z_]\w*)\s*$""")
     private val queryCall = Regex("""->\s*(join|leftJoin|innerJoin|rightJoin)\s*\(""")
     private val placeholder = Regex("""['"]:([a-zA-Z_]\w*)['"]""")
     private data class OpenCall(val method: String, val open: Int)
+
+
+    /**
+     * The manager accessor can be inherited and not declared in this file.
+     * Infer only conventional, zero-argument $this->...Manager() calls.
+     * NativeProjectIndex validates the inferred name against mapped managers.
+     */
+    private fun managerForReceiver(
+        receiver: String,
+        methodCall: Boolean,
+        managers: Map<String, String>,
+        imports: Map<String, String>,
+    ): String? {
+        if (!methodCall) return managers[receiver]
+        if (!receiver.startsWith("this->")) return null
+        val accessor = receiver.removePrefix("this->")
+        val shortName = when {
+            Regex("""get[A-Z]\w*Manager""").matches(accessor) -> accessor.removePrefix("get")
+            Regex("""[A-Za-z_]\w*Manager""").matches(accessor) ->
+                accessor.replaceFirstChar { it.uppercaseChar() }
+            else -> return null
+        }
+        return imports[shortName] ?: shortName
+    }
 
     fun resolve(sourceBeforeCaret: String): QueryContext? {
         if (sourceBeforeCaret.length > MAX_SOURCE_LENGTH) return null
@@ -96,7 +120,7 @@ object QueryContextResolver {
         val builderAssignments = mutableMapOf<String, Int>()
         val builderJoins = mutableMapOf<String, List<Map<String, String>>>()
         for (m in builder.findAll(localBefore)) {
-            val manager = managers[m.groupValues[2]] ?: continue
+            val manager = managerForReceiver(m.groupValues[2], m.groupValues[3].isNotBlank(), managers, importMap) ?: continue
             val variable = m.groupValues[1]
             val absoluteStart = localStart + m.range.first
             val absoluteEnd = localStart + m.range.last
@@ -110,7 +134,8 @@ object QueryContextResolver {
         val expression = before.substring(start)
         val inline = directBuilder.findAll(expression).lastOrNull()
         val target = if (inline != null) {
-            managers[inline.groupValues[1]]?.let { it to builderAlias(expression, inline.range.last + 1) }
+            managerForReceiver(inline.groupValues[1], inline.groupValues[2].isNotBlank(), managers, importMap)
+                ?.let { it to builderAlias(expression, inline.range.last + 1) }
         } else {
             val activeVariable = Regex("""\$(\w+)\s*->""").find(expression)?.groupValues?.get(1)
             if (activeVariable != null) builders[activeVariable] ?: managers[activeVariable]?.let { it to null } else null
