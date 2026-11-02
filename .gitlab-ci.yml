@@ -1,3 +1,7 @@
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+
 stages:
   - quality
   - tests
@@ -7,6 +11,7 @@ stages:
 
 default:
   image: composer:2
+  interruptible: true
   before_script:
     - composer install --prefer-dist --no-interaction --no-progress
 
@@ -49,6 +54,12 @@ phpstorm_build:
     - 'test "$(grep -R -o "<testcase " build/test-results/test --include="TEST-*.xml" | wc -l)" -ge 600'
     - jar tf build/distributions/*.zip | grep -E '/lib/[^/]+[.]jar$'
     - '! jar tf build/distributions/*.zip | grep -F "core/bin/sem-ide"'
+    # Test the actual ZIP a user installs; source archives have no plugin.xml.
+    - mkdir -p build/zip-verification
+    - '(cd build/zip-verification && jar xf ../distributions/*.zip)'
+    - 'test "$(find build/zip-verification -type f -name "small-entity-manager-phpstorm-*.jar" | wc -l)" -eq 1'
+    - 'jar tf "$(find build/zip-verification -type f -name "small-entity-manager-phpstorm-*.jar" -print -quit)" | grep -Fx "META-INF/plugin.xml"'
+    - 'jar tf "$(find build/zip-verification -type f -name "small-entity-manager-phpstorm-*.jar" -print -quit)" | grep -Fx "dev/smallproject/ide/SemManagerAccessorInference.class"'
   artifacts:
     when: always
     paths:

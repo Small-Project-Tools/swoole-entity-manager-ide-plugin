@@ -18,7 +18,12 @@ Native PhpStorm 2025.1+ plugin for Small Swoole Entity Manager Core 3 and its Sy
 
 ## Installation
 
-In PhpStorm: **Settings → Plugins → gear icon → Install Plugin from Disk**. Select the plugin ZIP from the \`phpstorm_build\` CI artifact or the GitLab release.
+In PhpStorm: **Settings → Plugins → gear icon → Install Plugin from Disk**.
+Install **`small-entity-manager-phpstorm-1.0.0-RC6.zip`** from the GitLab
+`phpstorm_build` job artifact. **Do not install
+`small-entity-manager-ide-core-1.0.0-RC6.zip`**: GitLab generates that as
+a source archive, and it has no JetBrains `META-INF/plugin.xml` descriptor.
+
 
 No PHP installation on Windows is required for these completion and inference features. Normal PhpStorm PHP debugging, PHPUnit and code execution still need a configured interpreter as usual.
 
@@ -33,7 +38,7 @@ Uses Gradle 9.2.1, JDK 21 and the official PhpStorm 2025.1.3 SDK with its bundle
 
 Output: \`build/distributions/small-entity-manager-phpstorm-<version>.zip\`.
 
-Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`1.0.0-RC3\`.
+Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`1.0.0-RC6\`.
 
 ## Query example
 

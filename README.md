@@ -73,6 +73,13 @@ Because this is a stateless **developer tool**, not a Small web application, no 
 - Requires semicolon namespace declarations and supports simple and grouped `use` imports. Complex trait adaptations, multi-property declarations and anonymous classes are not part of the first extraction contract.
 - Output describes symbols and completion candidates, not expression-level type checking or PHP execution. Caller must know the cursor position and query alias chain.
 
+## Installing the PhpStorm plugin
+
+Install `small-entity-manager-phpstorm-<version>.zip` from the
+`phpstorm_build` job artifact or the release asset. The automatically
+generated GitLab `small-entity-manager-ide-core-<version>.zip` file is
+**only a source archive**, not an installable PhpStorm plugin.
+
 ## Tagged releases
 
 Pushing a tag creates a GitLab Release after the mandatory `quality → tests → build → deploy` checks.
