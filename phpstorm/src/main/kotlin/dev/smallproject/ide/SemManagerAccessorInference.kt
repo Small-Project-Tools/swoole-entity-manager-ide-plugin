@@ -17,7 +17,7 @@ internal object SemManagerAccessorInference {
         """^\s*(\$(?:this->)?\w+)\s*->\s*get\s*\(([^;]*)\)\s*$""",
         RegexOption.DOT_MATCHES_ALL,
     )
-    private val delegate = Regex("""^\s*\$this->(\w+)\s*\(\s*\)\s*$""")
+    private val delegate = Regex("""^\s*\${'->(\w+)\s*\(\s*\)\s*$""")}this->(\w+)\s*\(\s*\)\s*$""")
     private val variable = Regex("""^\s*\$(\w+)\s*$""")
     private val assignment = Regex(
         """\$([A-Za-z_]\w*)\s*=\s*(\$(?:this->)?\w+)\s*->\s*get\s*\(([^;]*)\)\s*;""",
