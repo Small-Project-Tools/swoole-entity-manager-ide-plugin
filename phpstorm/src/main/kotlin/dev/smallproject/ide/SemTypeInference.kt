@@ -25,6 +25,48 @@ internal object SemTypeInference {
         }
     }
 
+
+    /**
+     * PhpStorm PSI removes argument names from MethodReference.parameters.
+     * Use the original ParameterList text to retain managerClass and manager
+     * when named arguments are reordered. Nested commas are not separators.
+     */
+    fun managerArgumentFromParameterList(parameterList: String): String? {
+        val raw = parameterList.trim()
+        if (raw.length < 2 || raw.first() != '(' || raw.last() != ')') return null
+        val inside = raw.substring(1, raw.length - 1)
+        val parts = mutableListOf<String>()
+        var start = 0
+        var nesting = 0
+        var quote: Char? = null
+        var escaped = false
+        for ((index, value) in inside.withIndex()) {
+            if (quote != null) {
+                when {
+                    escaped -> escaped = false
+                    value == '\\' -> escaped = true
+                    value == quote -> quote = null
+                }
+                continue
+            }
+            when (value) {
+                '\'', '"' -> quote = value
+                '(', '[', '{' -> nesting++
+                ')', ']', '}' -> {
+                    nesting--
+                    if (nesting < 0) return null
+                }
+                ',' -> if (nesting == 0) {
+                    parts.add(inside.substring(start, index))
+                    start = index + 1
+                }
+            }
+        }
+        if (nesting != 0 || quote != null) return null
+        parts.add(inside.substring(start))
+        return managerArgument(parts)?.trim()?.takeIf { classReference.matchEntire(it) != null }
+    }
+
     fun factoryResult(source: String, offset: Int, argument: String, receiver: String): String? {
         if (source.length > QueryContextResolver.MAX_SOURCE_LENGTH || offset !in 0..source.length) return null
         val match = classReference.matchEntire(argument) ?: return null

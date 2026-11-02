@@ -128,4 +128,33 @@ class SemTypeInferenceTest {
             "managerClass: UserManager::class", "manager: OrderManager::class",
         )))
     }
+
+    @Test fun namedParameterTextRetainsNamesAndNestedExpressions() {
+        assertEquals("managerClass: UserManager::class",
+            SemTypeInference.managerArgumentFromParameterList(
+                "(new: helper('hello, world', [1, 2]), managerClass: UserManager::class)"
+            ))
+        assertEquals("manager: UserManager::class",
+            SemTypeInference.managerArgumentFromParameterList(
+                "(manager: UserManager::class, new: false)"
+            ))
+        assertEquals("UserManager::class",
+            SemTypeInference.managerArgumentFromParameterList("(UserManager::class)"))
+        assertEquals("managerClass: UserManager::class",
+            SemTypeInference.managerArgumentFromParameterList(
+                "(\nnew: true,\nmanagerClass: UserManager::class,\n)"
+            ))
+    }
+
+    @Test fun malformedOrAmbiguousFactoryArgumentListsFailClosed() {
+        listOf("", "UserManager::class", "(", "(managerClass: UserManager::class",
+            "(managerClass: UserManager::class, new: [1, 2)",
+            "(new: true, managerClass: UserManager::class, manager: AnotherManager::class)",
+            "(managerClass: \"UserManager\")", "(new: true)",
+            "(UserManager::class, managerClass: AnotherManager::class)"
+        ).forEach { value ->
+            assertNull(SemTypeInference.managerArgumentFromParameterList(value), value)
+        }
+    }
+
 }

@@ -24,7 +24,7 @@ class SmallPhpTypeProvider : PhpTypeProvider4 {
         val source = file.text
         val offset = element.textOffset
         val concrete = if (name == "get") {
-            val argument = SemTypeInference.managerArgument(reference.parameters.map { it.text })
+            val argument = SemTypeInference.managerArgumentFromParameterList(reference.parameterList?.text ?: return null)
                 ?: return null
             SemTypeInference.factoryResult(source, offset, argument, receiver)
         } else {
@@ -35,6 +35,8 @@ class SmallPhpTypeProvider : PhpTypeProvider4 {
         } ?: return null
         return PhpType().add(concrete)
     }
+
+    // Tested with the PhpStorm 2026.2 inspector: otherwise the abstract\n    // native get() return is merged into the concrete manager type.\n    // Unsupported methods return null and keep the native inference.\n    override fun interceptsNativeSignature(): Boolean = true
 
     override fun complete(expression: String, project: Project): PhpType? = null
 
