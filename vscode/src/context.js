@@ -3,7 +3,9 @@
 
 const SUPPORTED_METHODS = new Set([
   'get', 'getFieldForCondition', 'addOrderBy', 'select', 'addSelect',
-  'join', 'leftJoin', 'rightJoin', 'innerJoin'
+  'join', 'leftJoin', 'rightJoin', 'innerJoin',
+  'firstCondition', 'andCondition', 'orCondition', 'xorCondition', 'setParameter', 'addFieldToUpdate',
+  'count', 'sum', 'avg', 'min', 'max'
 ]);
 
 /**
@@ -109,8 +111,9 @@ function activeCall(source, caret) {
   const sanitized = maskStrings(maskComments(source.slice(0, caret)));
   // A single method (or $this->property) receiver: do not guess through arbitrary expressions.
   const re = /(\$this->\w+|\$\w+)\s*->\s*(\w+)\s*\(/g;
+  const chained = /(\$this->\w+|\$\w+)\s*->\s*where\s*\(\s*\)\s*->\s*(firstCondition|andCondition|orCondition|xorCondition)\s*\(/g;
   let found = null;
-  for (const match of sanitized.matchAll(re)) {
+  for (const match of [...sanitized.matchAll(re), ...sanitized.matchAll(chained)]) {
     if (!SUPPORTED_METHODS.has(match[2])) continue;
     const open = match.index + match[0].length - 1;
     if (matchingCloseBefore(sanitized, open, caret)) continue;
@@ -172,6 +175,12 @@ function resolveManagerForVariable(index, source, caret, variable) {
   const fromFactory = new RegExp('\\$' + escaped + '\\s*=\\s*(?:\\$\\w+|\\$this->\\w+)\\s*->\\s*get\\s*\\(\\s*(?:(?:manager|managerClass)\\s*:\\s*)?([\\\\\\w]+)::class', 'g');
   const matches = [...scope.matchAll(fromFactory)];
   if (matches.length) return resolveClass(index, prefix, matches.at(-1)[1]);
+  if (variable.startsWith('$this->')) {
+    const property = variable.slice('$this->'.length);
+    const propertyType = new RegExp('\\b([A-Za-z_][\\\\\\w]*)\\s+\\$' + property + '\\b', 'g');
+    const typedProperties = [...prefix.matchAll(propertyType)];
+    if (typedProperties.length) return resolveClass(index, prefix, typedProperties.at(-1)[1]);
+  }
   const typed = new RegExp('\\b([A-Za-z_][\\\\\\w]*)\\s+\\$' + escaped + '\\b', 'g');
   const types = [...prefix.matchAll(typed)];
   if (types.length) return resolveClass(index, prefix, types.at(-1)[1]);
@@ -182,16 +191,28 @@ function resolveClass(index, source, name) {
   if (!name) return null;
   const candidate = name.replace(/^\\/, '');
   if (Object.hasOwn(index.managers, candidate)) return candidate;
-  const imports = [...source.matchAll(/(?:^|\n)\s*use\s+([\\\w]+)(?:\s+as\s+(\w+))?\s*;/g)];
+  const imports = [];
+  for (const match of source.matchAll(/(?:^|\n)\s*use\s+([\\\w]+)(?:\s+as\s+(\w+))?\s*;/g)) {
+    imports.push({ full: match[1], short: match[2] || match[1].split('\\').at(-1) });
+  }
+  for (const group of source.matchAll(/(?:^|\n)\s*use\s+([\\\w]+)\\\s*\{([^}]*)\}\s*;/g)) {
+    for (const item of group[2].split(',')) {
+      const match = /^\s*([\\\w]+)(?:\s+as\s+(\w+))?\s*$/.exec(item);
+      if (match) imports.push({ full: group[1] + '\\' + match[1], short: match[2] || match[1].split('\\').at(-1) });
+    }
+  }
   const first = candidate.split('\\')[0];
   for (const imported of imports) {
-    const short = imported[2] || imported[1].split('\\').at(-1);
-    if (first === short) {
-      const qualified = imported[1] + candidate.slice(first.length);
+    if (first === imported.short) {
+      const qualified = imported.full + candidate.slice(first.length);
       if (Object.hasOwn(index.managers, qualified)) return qualified;
     }
   }
-  // Basename fallback only when unambiguous.
+  // Resolve local namespace without guessing an ambiguous manager basename.
+  const namespace = /\bnamespace\s+([\\\w]+)\s*;/.exec(source)?.[1];
+  if (namespace && Object.hasOwn(index.managers, namespace + '\\' + candidate)) {
+    return namespace + '\\' + candidate;
+  }
   const candidates = Object.keys(index.managers).filter(key => key.split('\\').at(-1) === candidate);
   return candidates.length === 1 ? candidates[0] : null;
 }

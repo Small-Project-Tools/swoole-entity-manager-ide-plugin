@@ -185,7 +185,7 @@ vscode_build:
     - grep -F 'core/src/Autoload.php' package-files.txt
     - grep -F 'src/extension.js' package-files.txt
     - ./node_modules/.bin/vsce package --no-dependencies
-    - test -s small-entity-manager-vscode-0.1.0.vsix
+    - test -s small-entity-manager-vscode-0.2.0.vsix
     - ls -lh small-entity-manager-vscode-0.1.0.vsix
   artifacts:
     when: always

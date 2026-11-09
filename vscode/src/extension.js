@@ -4,6 +4,7 @@
 const path = require('node:path');
 const vscode = require('vscode');
 const { readIndex, IndexCache } = require('./core');
+const { withManagerMethods } = require('./manager-methods');
 const { activeCall } = require('./context');
 const { getCompletions } = require('./completion');
 
@@ -11,11 +12,11 @@ function activate(context) {
   const output = vscode.window.createOutputChannel('Small Entity Manager');
   const cliPath = path.join(context.extensionPath, 'core', 'bin', 'sem-ide');
   const config = () => vscode.workspace.getConfiguration('smallEntityManager');
-  const index = new IndexCache(workspacePath => readIndex({
+  const index = new IndexCache(async workspacePath => withManagerMethods(await readIndex({
     phpExecutable: config().get('phpExecutable', 'php'),
     cliPath,
     workspacePath
-  }));
+  }), workspacePath));
   const watchers = new Map();
   const watch = folder => {
     const key = folder.uri.toString();
@@ -46,7 +47,7 @@ function activate(context) {
       async provideCompletionItems(document, position, token) {
         const source = document.getText();
         const caret = document.offsetAt(position);
-        if (!activeCall(source, caret)) return [];
+        if (!activeCall(source, caret) && !/(\$this->\w+|\$\w+)\s*->\s*\w*$/.test(source.slice(0, caret))) return [];
         const folder = vscode.workspace.getWorkspaceFolder(document.uri);
         if (!folder) return [];
         try {
@@ -57,7 +58,11 @@ function activate(context) {
               manager: vscode.CompletionItemKind.Class,
               field: vscode.CompletionItemKind.Field,
               relation: vscode.CompletionItemKind.Property,
-              alias: vscode.CompletionItemKind.Variable
+              alias: vscode.CompletionItemKind.Variable,
+              operator: vscode.CompletionItemKind.EnumMember,
+              parameter: vscode.CompletionItemKind.Variable,
+              expression: vscode.CompletionItemKind.Snippet,
+              method: vscode.CompletionItemKind.Method
             }[item.kind]);
             completion.insertText = item.insertText;
             completion.range = new vscode.Range(document.positionAt(item.start), document.positionAt(item.end));
@@ -70,7 +75,7 @@ function activate(context) {
           return [];
         }
       }
-    }, "'", '"', '(', ',')
+    }, "'", '"', '(', ',', '>')
   );
 
   context.subscriptions.push(vscode.commands.registerCommand('smallEntityManager.refreshIndex', async () => {

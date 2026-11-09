@@ -2,6 +2,7 @@
 'use strict';
 
 const { activeCall, aliasMapForQuery, isSmallFactory, literal } = require('./context');
+const { conditionSuggestions, memberSuggestions, parameterSuggestions } = require('./advanced');
 
 /**
  * Pure completion engine over the immutable v1 PHP index. An editor adapter
@@ -9,10 +10,35 @@ const { activeCall, aliasMapForQuery, isSmallFactory, literal } = require('./con
  */
 function getCompletions(index, source, caret) {
   const call = activeCall(source, caret);
-  if (!call) return [];
-  const argument = call.args[call.argumentIndex] || '';
-  const range = replacement(source, caret, call.argumentStart, argument);
+  if (!call) return memberSuggestions(index, source, caret);
+  let argument = call.args[call.argumentIndex] || '';
+  let start = call.argumentStart;
+  const named = /^\s*([A-Za-z_]\w*)\s*:(?!:)\s*/.exec(argument);
+  const namesByMethod = {
+    get: { manager: 0, managerClass: 0 },
+    getFieldForCondition: { fieldName: 0, entityAlias: 1 },
+    firstCondition: { var1: 0, operator: 1, var2: 2 },
+    andCondition: { var1: 0, operator: 1, var2: 2 },
+    orCondition: { var1: 0, operator: 1, var2: 2 },
+    xorCondition: { var1: 0, operator: 1, var2: 2 },
+    leftJoin: { fromAlias: 0, relationAlias: 1, alias: 2 },
+    setParameter: { name: 0, parameter: 0 }
+  };
+  if (named) {
+    const mapped = namesByMethod[call.method]?.[named[1]];
+    if (mapped === undefined) return [];
+    call.argumentIndex = mapped;
+    start += named[0].length;
+    argument = argument.slice(named[0].length);
+  }
+  let range = replacement(source, caret, start, argument);
+  if (!range && ['firstCondition', 'andCondition', 'orCondition', 'xorCondition'].includes(call.method) &&
+      call.argumentIndex === 1 && /^[\s\\\w:]*$/.test(argument)) {
+    range = { start: start + (argument.match(/^\s*/)?.[0].length || 0), end: caret, quoted: false };
+  }
   if (!range) return [];
+  const conditions = conditionSuggestions(index, source, caret, call, range);
+  if (conditions !== null) return conditions;
   if (call.method === 'get') {
     if (call.argumentIndex !== 0 || !isSmallFactory(source, call.receiver, caret) || range.quoted) return [];
     return Object.keys(index.managers).sort().map(manager => ({
@@ -25,10 +51,14 @@ function getCompletions(index, source, caret) {
   }
   const context = aliasMapForQuery(index, source, caret, call.receiver);
   if (!context) return [];
+  if (call.method === 'setParameter' && call.argumentIndex === 0) {
+    return parameterSuggestions(source, range, caret, call.receiver);
+  }
   let names = [];
   let kind = 'field';
   const { aliases, rootAlias } = context;
-  const fieldMethods = ['getFieldForCondition', 'addOrderBy', 'select', 'addSelect'];
+  const fieldMethods = ['getFieldForCondition', 'addOrderBy', 'select', 'addSelect',
+    'addFieldToUpdate', 'count', 'sum', 'avg', 'min', 'max'];
   let qualified = null;
   if (fieldMethods.includes(call.method)) {
     if (call.argumentIndex === 0) {
@@ -39,7 +69,9 @@ function getCompletions(index, source, caret) {
         qualified = { alias: dotted[2], quote: dotted[1] };
         names = Object.keys(index.entities[entityName]?.fields || {});
       } else if (!argument.includes('.')) {
-        const entity = index.entities[aliases.get(rootAlias)];
+        const tail = source.slice(caret).match(/^([^;\n]*)\)/)?.[1] || '';
+        const explicitAlias = /^\s*(['"]).*?\1\s*,\s*(?:entityAlias\s*:\s*)?(['"])(\w+)\2/.exec(argument + tail)?.[3];
+        const entity = index.entities[aliases.get(explicitAlias || rootAlias)];
         names = Object.keys(entity?.fields || {});
       }
     } else if (call.argumentIndex === 1) {
