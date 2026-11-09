@@ -2,7 +2,7 @@
 
 ![Small Entity Manager PhpStorm plugin](phpstorm/assets/plugin-logo.png)
 
-Static, read-only project metadata for **Small Swoole Entity Manager Core 3** and the compatible **Symfony Bundle 2**. This repository contains the common engine shared by the VS Code and PhpStorm integrations. The **PhpStorm plugin** in [phpstorm/](phpstorm/) now indexes PHP natively without requiring a local interpreter; the PHP CLI here is retained for other IDE adapters. The VS Code adapter is not yet implemented.
+Static, read-only project metadata for **Small Swoole Entity Manager Core 3** and the compatible **Symfony Bundle 2**. This repository contains the common engine shared by the VS Code and PhpStorm integrations. The **PhpStorm plugin** in [phpstorm/](phpstorm/) now indexes PHP natively without requiring a local interpreter; the PHP CLI here is retained for other IDE adapters. The [VS Code adapter](vscode/README.md) is available as a first 0.1.0 implementation; it uses the shared PHP CLI indexer and currently requires PHP 8.4+ in the VS Code extension host.
 
 ## Features
 
@@ -12,6 +12,10 @@ Static, read-only project metadata for **Small Swoole Entity Manager Core 3** an
 - Follow query join aliases to their target managers and entities when completing fields/relations.
 - Return `class-string`-based factory return-type hints and argument positions for query builders.
 - Return deterministic JSON with a versioned schema and source locations. Does not execute, instantiate or autoload application classes and never connects to a database.
+
+## VS Code integration (first 0.1.0 version)
+
+The [VS Code extension](vscode/README.md) suggests Small manager classes, mapped fields, join relations and query aliases. Its `vscode_build` CI job runs Node tests and packages an installable VSIX artifact; no Marketplace release occurs on feature branches. Unlike the native PhpStorm plugin, this first adapter requires a PHP 8.4+ CLI for static indexing.
 
 ## PHP and installation
 

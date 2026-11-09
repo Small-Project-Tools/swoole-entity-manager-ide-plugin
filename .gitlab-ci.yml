@@ -170,3 +170,29 @@ repair_release:
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $RELEASE_TAG'
       when: manual
+
+vscode_build:
+  stage: build
+  image: node:22-bookworm
+  before_script: []
+  script:
+    - cd vscode
+    - npm install --no-audit --no-fund
+    - npm test
+    - npm run bundle-core
+    - ./node_modules/.bin/vsce ls --no-dependencies | tee package-files.txt
+    - grep -F 'core/bin/sem-ide' package-files.txt
+    - grep -F 'core/src/Autoload.php' package-files.txt
+    - grep -F 'src/extension.js' package-files.txt
+    - ./node_modules/.bin/vsce package --no-dependencies
+    - test -s small-entity-manager-vscode-0.1.0.vsix
+    - ls -lh small-entity-manager-vscode-0.1.0.vsix
+  artifacts:
+    when: always
+    paths:
+      - vscode/*.vsix
+      - vscode/package-files.txt
+    expire_in: 7 days
+  rules:
+    - if: '$CI_COMMIT_BRANCH || $CI_MERGE_REQUEST_IID || $CI_COMMIT_TAG'
+

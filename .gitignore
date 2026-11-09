@@ -7,3 +7,7 @@
 /dist/
 /.sem-ide-index.json
 composer.lock
+/vscode/core/
+/vscode/node_modules/
+/vscode/*.vsix
+/vscode/package-files.txt
