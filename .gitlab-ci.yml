@@ -32,18 +32,19 @@ phpstorm_build:
   before_script: []
   interruptible: true
   retry:
-    max: 1
+    max: 2
     when:
       - runner_system_failure
       - stuck_or_timeout_failure
   variables:
     GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-user-home"
+  resource_group: phpstorm-sdk-build
   script:
     - df -h .
     - cd phpstorm
     # A stalled JetBrains test process must fail with a bounded diagnostic,
     # rather than occupying scarce Kubernetes runners indefinitely.
-    - timeout --signal=TERM --kill-after=30s 28m gradle --no-daemon --max-workers=2 --console=plain --stacktrace verifyPluginConfiguration test buildPlugin verifyPluginStructure
+    - timeout --signal=TERM --kill-after=30s 28m gradle --no-daemon --max-workers=1 --console=plain --stacktrace verifyPluginConfiguration test buildPlugin verifyPluginStructure
     - ls -lh build/distributions/*.zip
     - jar tf build/libs/*-base.jar | grep -F 'META-INF/plugin.xml'
     - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/SmallCompletionContributor.class'
@@ -63,6 +64,14 @@ phpstorm_build:
     - 'test "$(find build/zip-verification -type f -name "small-entity-manager-phpstorm-*.jar" | wc -l)" -eq 1'
     - 'jar tf "$(find build/zip-verification -type f -name "small-entity-manager-phpstorm-*.jar" -print -quit)" | grep -Fx "META-INF/plugin.xml"'
     - 'jar tf "$(find build/zip-verification -type f -name "small-entity-manager-phpstorm-*.jar" -print -quit)" | grep -Fx "dev/smallproject/ide/SemManagerAccessorInference.class"'
+  after_script:
+    - |
+      for metric in memory.current memory.peak memory.events; do
+        if [ -r "/sys/fs/cgroup/$metric" ]; then
+          printf 'Cgroup %s:\\n' "$metric"
+          cat "/sys/fs/cgroup/$metric"
+        fi
+      done
   artifacts:
     when: always
     paths:
