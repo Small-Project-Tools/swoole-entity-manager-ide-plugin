@@ -9,8 +9,8 @@ const path = require('node:path');
 
 const syntheticIndex = {
   schemaVersion: 1, engine: 'small/entity-manager-ide-core',
-  entities: { 'Demo\\Entity\\User': { fields: { email: {} }, relations: {} } },
-  managers: { 'Demo\\EntityManager\\UserManager': { entity: 'Demo\\Entity\\User' } },
+  entities: { 'Demo\\Entity\\User': { fields: { email: {file:'demo.php',line:3} }, relations: {} } },
+  managers: { 'Demo\\EntityManager\\UserManager': { entity: 'Demo\\Entity\\User', file:'demo.php', line:1 } },
   diagnostics: []
 };
 
@@ -26,6 +26,7 @@ test('VS Code provider invokes bundled indexer, offers completion and diagnostic
   const folder = { uri: { fsPath: temp, toString: () => 'file://' + temp } };
   const commands = new Map();
   let provider;
+  let definitionProvider;
   let watcherChange;
   const messages = [];
   const mock = {
@@ -46,6 +47,10 @@ test('VS Code provider invokes bundled indexer, offers completion and diagnostic
       assert.equal(selector.language, 'php');
       provider = registered;
       return {dispose() {}};
+    }, registerDefinitionProvider: (selector, registered) => {
+      assert.equal(selector.language, 'php');
+      definitionProvider = registered;
+      return {dispose() {}};
     }},
     commands: { registerCommand: (name, fn) => {
       commands.set(name, fn);
@@ -60,6 +65,9 @@ test('VS Code provider invokes bundled indexer, offers completion and diagnostic
     },
     RelativePattern: class {constructor(folder, pattern) { this.folder = folder; this.pattern = pattern; }},
     Range: class {constructor(start, end) {this.start = start;this.end = end;}},
+    Position: class {constructor(line, character) {this.line = line;this.character = character;}},
+    Location: class {constructor(uri, position) {this.uri = uri;this.position = position;}},
+    Uri: {file: fsPath => ({fsPath})},
     CompletionItem: class {constructor(label, kind) {this.label = label;this.kind = kind;}},
     CompletionItemKind: {Class:1,Field:2,Property:3,Variable:4}
   };
@@ -84,6 +92,14 @@ test('VS Code provider invokes bundled indexer, offers completion and diagnostic
     assert.deepEqual(items.map(item => item.label), ['email']);
     assert.equal(items[0].insertText, 'email');
     assert.ok(items[0].range.start.offset < items[0].range.end.offset || items[0].range.start.offset === items[0].range.end.offset);
+    const linkedSource = source.replace("getFieldForCondition('')", "getFieldForCondition('email')");
+    const linkedCaret = linkedSource.indexOf("getFieldForCondition('email'") +
+      "getFieldForCondition('ema".length;
+    const definition = await definitionProvider.provideDefinition(
+      {...document,getText:() => linkedSource},{offset:linkedCaret},{isCancellationRequested:false}
+    );
+    assert.equal(definition?.uri?.fsPath, phpFile);
+    assert.equal(definition?.position?.line, 2);
     assert.equal(commands.has('smallEntityManager.refreshIndex'), true);
     assert.equal(commands.has('smallEntityManager.showDiagnostics'), true);
     await commands.get('smallEntityManager.showDiagnostics')();

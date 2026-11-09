@@ -11,3 +11,4 @@ composer.lock
 /vscode/node_modules/
 /vscode/*.vsix
 /vscode/package-files.txt
+/vscode/dist/

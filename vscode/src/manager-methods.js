@@ -5,6 +5,7 @@ const path = require('node:path');
 
 /** Discover local public manager methods without loading project classes. */
 function withManagerMethods(index, root) {
+  if (index.managerMethods && typeof index.managerMethods === 'object') return index;
   const managerMethods = {};
   const rootResolved = fs.realpathSync(root);
   for (const [manager, metadata] of Object.entries(index.managers)) {

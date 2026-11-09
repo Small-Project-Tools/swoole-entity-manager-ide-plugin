@@ -26,7 +26,7 @@ function conditionQuery(source, receiver, caret) {
 function conditionSuggestions(index, source, caret, call, range) {
   if (!CONDITION_METHODS.has(call.method)) return null;
   const receiver = conditionQuery(source, call.receiver, caret);
-  const context = aliasMapForQuery(index, source, caret, receiver);
+  const context = aliasMapForQuery(index, source, caret, receiver, call.inlineRootAlias);
   if (!context) return [];
   const names = [];
   if (call.argumentIndex === 0 && !range.quoted) {
@@ -72,7 +72,7 @@ function parameterSuggestions(source, range, caret, receiver, withColon = false)
 
 function memberSuggestions(index, source, caret) {
   const prefix = maskStrings(maskComments(source.slice(0, caret)));
-  const match = /(\$this->\w+|\$\w+)\s*->\s*([A-Za-z_]\w*)?$/.exec(prefix);
+  const match = /(\$this->\w+(?:\(\s*\))?|\$\w+)\s*->\s*([A-Za-z_]\w*)?$/.exec(prefix);
   if (!match) return [];
   const manager = resolveManagerForVariable(index, source, caret, match[1]);
   if (!manager || !index.managers[manager]) return [];

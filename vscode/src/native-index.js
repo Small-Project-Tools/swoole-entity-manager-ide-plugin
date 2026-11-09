@@ -87,12 +87,16 @@ function extractSymbols(body, namespace, imports, file) {
     const attrs = attributesOf(node, resolve);
     const properties = [];
     const traits = [];
+    const methods = [];
     for (const child of node.body || []) {
       if (child.kind === 'traituse') {
         for (const ref of child.traits || []) {
           const name = resolve(nameOf(ref));
           if (name) traits.push(name);
         }
+      } else if (child.kind === 'method') {
+        const method = nameOf(child.name);
+        if (method && !child.isStatic && (!child.visibility || child.visibility === 'public')) methods.push(method);
       } else if (child.kind === 'propertystatement') {
         for (const property of child.properties || []) {
           const named = nameOf(property.name);
@@ -101,7 +105,7 @@ function extractSymbols(body, namespace, imports, file) {
         }
       }
     }
-    symbols.push({kind:node.kind,class:cls,attrs,properties,traits,parent:resolve(nameOf(node.extends)),resolve,file,line:node.loc?.start?.line || 1});
+    symbols.push({kind:node.kind,class:cls,attrs,properties,traits,methods,parent:resolve(nameOf(node.extends)),resolve,file,line:node.loc?.start?.line || 1});
   }
   return symbols;
 }
@@ -139,6 +143,15 @@ function collectProperties(symbol, symbolMap, fields, relations, visited) {
       if (rel) relations[property.name] = {...common,cardinality,manager:classArg(rel,0,'toManager',symbol.resolve)};
     }
   }
+}
+
+function collectMethods(symbol, symbolMap, names, visited) {
+  if (!symbol || visited.has(symbol.class)) return;
+  visited.add(symbol.class);
+  for (const name of [symbol.parent, ...symbol.traits]) {
+    if (name && symbolMap.has(name)) collectMethods(symbolMap.get(name),symbolMap,names,visited);
+  }
+  for (const method of symbol.methods) names.add(method);
 }
 
 function projectFiles(root) {
@@ -192,12 +205,18 @@ function indexProject(root) {
         connection:stringArg(symbol.attrs.get(CONNECTION_ATTRIBUTE),0,'connectionName')};
     }
   }
+  const managerMethods = {};
+  for (const managerClass of Object.keys(managers)) {
+    const names = new Set();
+    collectMethods(symbols.get(managerClass),symbols,names,new Set());
+    managerMethods[managerClass] = [...names].sort();
+  }
   for (const manager of Object.values(managers)) {
     if (!Object.hasOwn(entities,manager.entity)) diagnostics.push({code:'entity-not-indexed',class:manager.class,file:manager.file,entity:manager.entity});
   }
   return {schemaVersion:1,engine:'small/entity-manager-ide-core',
     entities:Object.fromEntries(Object.entries(entities).sort(([a],[b])=>a.localeCompare(b))),
     managers:Object.fromEntries(Object.entries(managers).sort(([a],[b])=>a.localeCompare(b))),
-    api:{},diagnostics};
+    managerMethods,api:{},diagnostics};
 }
 module.exports = { indexProject, scanSource };

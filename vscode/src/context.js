@@ -108,25 +108,34 @@ function matchingCloseBefore(source, open, caret) {
 
 function activeCall(source, caret) {
   if (!Number.isInteger(caret) || caret < 0 || caret > source.length) return null;
-  const sanitized = maskStrings(maskComments(source.slice(0, caret)));
-  // A single method (or $this->property) receiver: do not guess through arbitrary expressions.
+  const sanitized = maskStrings(maskComments(source.slice(0,caret)));
   const re = /(\$this->\w+|\$\w+)\s*->\s*(\w+)\s*\(/g;
   const chained = /(\$this->\w+|\$\w+)\s*->\s*where\s*\(\s*\)\s*->\s*(firstCondition|andCondition|orCondition|xorCondition)\s*\(/g;
+  const inline = /(\$this->\w+(?:\(\s*\))?|\$\w+)\s*->\s*(?:createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder)\s*\([^()]*\)\s*->\s*(\w+)\s*\(/g;
   let found = null;
-  for (const match of [...sanitized.matchAll(re), ...sanitized.matchAll(chained)]) {
-    if (!SUPPORTED_METHODS.has(match[2])) continue;
+  const consider = (match,method,receiver,inlineRootAlias) => {
+    if (!SUPPORTED_METHODS.has(method)) return;
     const open = match.index + match[0].length - 1;
-    if (matchingCloseBefore(sanitized, open, caret)) continue;
-    if (!found || open > found.open) {
-      const rawArgs = source.slice(open + 1, caret);
-      const args = splitArguments(rawArgs);
-      found = {
-        method: match[2], receiver: match[1], open,
-        args: args.map(arg => arg.text),
-        argumentIndex: args.length - 1,
-        argumentStart: open + 1 + args[args.length - 1].start
-      };
-    }
+    if (matchingCloseBefore(sanitized,open,caret)) return;
+    if (found && found.open >= open) return;
+    const rawArgs = source.slice(open + 1,caret);
+    const args = splitArguments(rawArgs);
+    found = {
+      method,receiver,open,args:args.map(arg=>arg.text),
+      argumentIndex:args.length-1,
+      argumentStart:open+1+args.at(-1).start
+    };
+    if (inlineRootAlias !== undefined) found.inlineRootAlias = inlineRootAlias;
+  };
+  for (const match of sanitized.matchAll(re)) consider(match,match[2],match[1]);
+  for (const match of sanitized.matchAll(chained)) consider(match,match[2],match[1]);
+  for (const match of sanitized.matchAll(inline)) {
+    const builderMatch = /->\s*(?:createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder)\s*\(/.exec(match[0]);
+    if (!builderMatch) continue;
+    const builderOpen = match.index + builderMatch.index + builderMatch[0].length - 1;
+    const builderArgs = parseCallArguments(source,builderOpen);
+    if (builderArgs === null) continue;
+    consider(match,match[2],match[1],literal(builderArgs));
   }
   return found;
 }
@@ -136,54 +145,172 @@ function literal(argument) {
   return match ? match[2] : null;
 }
 
-function aliasMapForQuery(index, source, caret, receiver) {
-  const prefix = maskComments(source.slice(0, caret));
-  const queryName = receiver.replace('$', '');
-  // Scope assignments to the current method to avoid leaking from unrelated functions.
-  const functionMatches = [...prefix.matchAll(/\bfunction\s+\w+\s*\(/g)];
-  const scope = functionMatches.length ? prefix.slice(functionMatches.at(-1).index) : prefix;
-  const escaped = queryName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const queryPattern = new RegExp('\\$' + escaped + '\\s*=\\s*(\\$\\w+)\\s*->\\s*(?:createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder)\\s*\\(\\s*([\\x27\"])([A-Za-z_]\\w*)\\2\\s*\\)', 'g');
-  const bindings = [...scope.matchAll(queryPattern)];
-  if (bindings.length === 0) return null;
+function escapeRegExp(value) {
+  return value.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
+}
+
+/** Only consult declarations of the class containing the caret, never a later class. */
+function currentClassSource(source, caret) {
+  const masked = maskStrings(maskComments(source));
+  const classes = [...masked.slice(0,caret).matchAll(/\b(?:class|trait)\s+[A-Za-z_]\w*\b/g)];
+  if (!classes.length) return '';
+  const start = classes.at(-1).index;
+  const next = /\b(?:class|trait)\s+[A-Za-z_]\w*\b/g;
+  next.lastIndex = start + classes.at(-1)[0].length;
+  const following = next.exec(masked);
+  return source.slice(start, following ? following.index : source.length);
+}
+
+function parseCallArguments(source, open) {
+  let depth = 0;
+  let quote = null;
+  for (let i = open; i < source.length; i++) {
+    const ch = source[i];
+    if (quote) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === quote) quote = null;
+    } else if (ch === "'" || ch === '"') quote = ch;
+    else if (ch === '(') depth++;
+    else if (ch === ')') {
+      depth--;
+      if (depth === 0) return source.slice(open + 1,i);
+    }
+  }
+  return null;
+}
+
+function joinedAliasArgument(argumentsText, position, named) {
+  const argumentsList = splitArguments(argumentsText).map(p => p.text.trim());
+  const byName = argumentsList.find(value => new RegExp('^' + named + '\\s*:').test(value));
+  if (byName) return literal(byName.slice(byName.indexOf(':') + 1));
+  return literal(argumentsList.filter(value => !/^[A-Za-z_]\w*\s*:(?!:)/.test(value))[position]);
+}
+
+function updateQueryAliases(index, scopedTail, assignmentTailEnd, receiver, aliases) {
+  const masked = maskStrings(maskComments(scopedTail));
+  const events = [];
+  const generic = /->\s*(?:join|leftJoin|rightJoin|innerJoin)\s*\(/g;
+  for (const match of masked.slice(0,assignmentTailEnd).matchAll(generic)) {
+    events.push({index:match.index,open:match.index + match[0].length - 1});
+  }
+  const explicit = new RegExp('\\$' + escapeRegExp(receiver) +
+    '\\s*->\\s*(?:join|leftJoin|rightJoin|innerJoin)\\s*\\(', 'g');
+  for (const match of masked.matchAll(explicit)) {
+    events.push({index:match.index,open:match.index + match[0].length - 1});
+  }
+  const seen = new Set();
+  for (const event of events.sort((a,b)=>a.index-b.index)) {
+    if (seen.has(event.open)) continue;
+    seen.add(event.open);
+    const argumentsText = parseCallArguments(scopedTail, event.open);
+    if (!argumentsText) continue;
+    const fromAlias = joinedAliasArgument(argumentsText,0,'fromAlias');
+    const relation = joinedAliasArgument(argumentsText,1,'relationAlias|relation');
+    const alias = joinedAliasArgument(argumentsText,2,'alias') || relation;
+    if (!fromAlias || !relation || !alias) continue;
+    const fromEntity = aliases.get(fromAlias);
+    const targetManager = fromEntity && index.entities[fromEntity]?.relations?.[relation]?.manager;
+    const target = targetManager && index.managers[targetManager]?.entity;
+    if (target && index.entities[target]) aliases.set(alias,target);
+  }
+}
+
+function aliasMapForQuery(index, source, caret, receiver, inlineRootAlias = undefined) {
+  if (inlineRootAlias !== undefined) {
+    const manager = resolveManagerForVariable(index,source,caret,receiver);
+    if (!manager || !index.managers[manager]) return null;
+    const entity = index.managers[manager].entity;
+    if (!index.entities[entity]) return null;
+    const name = entity.split('\\').at(-1);
+    const rootAlias = inlineRootAlias || name[0].toLowerCase() + name.slice(1);
+    return {manager,rootAlias,aliases:new Map([[rootAlias,entity]])};
+  }
+  if (!/^\$\w+$/.test(receiver)) return null;
+  const prefix = maskComments(source.slice(0,caret));
+  const functions = [...prefix.matchAll(/\bfunction\s+\w+\s*\(/g)];
+  const scope = functions.length ? prefix.slice(functions.at(-1).index) : prefix;
+  const variableName = receiver.slice(1);
+  const pattern = new RegExp('\\$' + escapeRegExp(variableName) +
+    '\\s*=\\s*(\\$this->\\w+(?:\\(\\s*\\))?|\\$\\w+)\\s*->\\s*' +
+    '(?:createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder)' +
+    '\\s*\\(\\s*(?:([\\x27"])([A-Za-z_]\\w*)\\2)?\\s*\\)', 'g');
+  const bindings = [...scope.matchAll(pattern)];
+  if (!bindings.length) return null;
   const binding = bindings.at(-1);
-  const managerVar = binding[1];
-  const rootAlias = binding[3];
-  const manager = resolveManagerForVariable(index, source, caret, managerVar);
+  const manager = resolveManagerForVariable(index,source,caret,binding[1]);
   if (!manager || !index.managers[manager]) return null;
   const entity = index.managers[manager].entity;
   if (!index.entities[entity]) return null;
-  const aliases = new Map([[rootAlias, entity]]);
-  const joins = new RegExp('\\$' + escaped + '\\s*->\\s*(?:join|leftJoin|rightJoin|innerJoin)\\s*\\(\\s*([\\x27\"])(\\w+)\\1\\s*,\\s*([\\x27\"])(\\w+)\\3\\s*,\\s*([\\x27\"])(\\w+)\\5\\s*\\)', 'g');
-  // Start with this binding, never apply joins from a previous query assignment.
-  const afterBinding = scope.slice(binding.index + binding[0].length);
-  for (const join of afterBinding.matchAll(joins)) {
-    const from = aliases.get(join[2]);
-    const relatedManager = from && index.entities[from]?.relations?.[join[4]]?.manager;
-    const target = relatedManager && index.managers[relatedManager]?.entity;
-    if (target && index.entities[target]) aliases.set(join[6], target);
-  }
-  return { manager, rootAlias, aliases };
+  const short = entity.split('\\').at(-1);
+  const rootAlias = binding[3] || short[0].toLowerCase() + short.slice(1);
+  const aliases = new Map([[rootAlias,entity]]);
+  const tail = scope.slice(binding.index + binding[0].length);
+  const semicolon = maskStrings(tail).indexOf(';');
+  updateQueryAliases(index,tail,semicolon >= 0 ? semicolon : tail.length,variableName,aliases);
+  return {manager,rootAlias,aliases};
 }
 
-function resolveManagerForVariable(index, source, caret, variable) {
-  const prefix = maskComments(source.slice(0, caret));
-  const name = variable.replace('$', '');
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const functionMatches = [...prefix.matchAll(/\bfunction\s+\w+\s*\(/g)];
-  const scope = functionMatches.length ? prefix.slice(functionMatches.at(-1).index) : prefix;
-  const fromFactory = new RegExp('\\$' + escaped + '\\s*=\\s*(?:\\$\\w+|\\$this->\\w+)\\s*->\\s*get\\s*\\(\\s*(?:(?:manager|managerClass)\\s*:\\s*)?([\\\\\\w]+)::class', 'g');
-  const matches = [...scope.matchAll(fromFactory)];
-  if (matches.length) return resolveClass(index, prefix, matches.at(-1)[1]);
+function resolveManagerFromAccessor(index, source, caret, accessor, visited) {
+  if (visited.has(accessor)) return null;
+  visited.add(accessor);
+  const classText = currentClassSource(source,caret);
+  if (!classText) return null;
+  const escaped = escapeRegExp(accessor);
+  const declaration = new RegExp('\\bfunction\\s+' + escaped +
+    '\\s*\\([^)]*\\)\\s*(?::\\s*\\??([\\\\\\w]+))?\\s*\\{','g');
+  const matches = [...classText.matchAll(declaration)];
+  if (matches.length !== 1) return null;
+  const matched = matches[0];
+  if (matched[1]) {
+    const typed = resolveClass(index,source,matched[1]);
+    if (typed) return typed;
+  }
+  const open = matched.index + matched[0].length - 1;
+  const remaining = classText.slice(open + 1);
+  const close = maskStrings(maskComments(remaining)).indexOf('}');
+  const body = remaining.slice(0,close < 0 ? 3000 : close);
+  const property = /\breturn\s+(\$this->\w+)\s*;/.exec(body);
+  if (property) return resolveManagerForVariable(index,source,caret,property[1],visited);
+  const byFactory = /\breturn\s+(\$this->\w+)\s*->\s*get\s*\(\s*(?:(?:manager|managerClass)\s*:\s*)?([\\\w]+)::class/.exec(body);
+  if (byFactory && isSmallFactory(source,byFactory[1],caret)) return resolveClass(index,source,byFactory[2]);
+  return null;
+}
+
+function resolveManagerForVariable(index, source, caret, variable, visited = new Set()) {
+  if (/^\$this->\w+\(\s*\)$/.test(variable)) {
+    return resolveManagerFromAccessor(index,source,caret,
+      variable.slice('$this->'.length).replace(/\(\s*\)$/,''),visited);
+  }
+  const prefix = maskComments(source.slice(0,caret));
   if (variable.startsWith('$this->')) {
     const property = variable.slice('$this->'.length);
-    const propertyType = new RegExp('\\b([A-Za-z_][\\\\\\w]*)\\s+\\$' + property + '\\b', 'g');
-    const typedProperties = [...prefix.matchAll(propertyType)];
-    if (typedProperties.length) return resolveClass(index, prefix, typedProperties.at(-1)[1]);
+    const section = currentClassSource(source,caret);
+    const pattern = new RegExp('\\b(?:private|protected|public)\\s+(?:(?:readonly|static)\\s+)*\\??([\\\\\\w]+)\\s+\\$' +
+      escapeRegExp(property) + '\\b','g');
+    const candidates = [...section.matchAll(pattern)];
+    if (candidates.length) return resolveClass(index,source,candidates.at(-1)[1]);
+    return null;
   }
-  const typed = new RegExp('\\b([A-Za-z_][\\\\\\w]*)\\s+\\$' + escaped + '\\b', 'g');
-  const types = [...prefix.matchAll(typed)];
-  if (types.length) return resolveClass(index, prefix, types.at(-1)[1]);
+  if (!/^\$\w+$/.test(variable)) return null;
+  const escaped = escapeRegExp(variable.slice(1));
+  const functions = [...prefix.matchAll(/\bfunction\s+\w+\s*\(/g)];
+  const scope = functions.length ? prefix.slice(functions.at(-1).index) : prefix;
+  const factories = new RegExp('\\$' + escaped +
+    '\\s*=\\s*(\\$this->\\w+|\\$\\w+)\\s*->\\s*get\\s*\\(\\s*' +
+    '(?:(?:manager|managerClass)\\s*:\\s*)?([\\\\\\w]+)::class','g');
+  const fromFactory = [...scope.matchAll(factories)];
+  if (fromFactory.length) {
+    const selected = fromFactory.at(-1);
+    if (!isSmallFactory(source,selected[1],caret)) return null;
+    return resolveClass(index,source,selected[2]);
+  }
+  const accessor = new RegExp('\\$' + escaped +
+    '\\s*=\\s*(\\$this->\\w+\\(\\s*\\))\\s*;','g');
+  const byAccessor = [...scope.matchAll(accessor)];
+  if (byAccessor.length) return resolveManagerForVariable(index,source,caret,byAccessor.at(-1)[1],visited);
+  const typed = new RegExp('\\b([A-Za-z_][\\\\\\w]*)\\s+\\$' + escaped + '\\b','g');
+  const matches = [...prefix.matchAll(typed)];
+  if (matches.length) return resolveClass(index,prefix,matches.at(-1)[1]);
   return null;
 }
 
@@ -218,13 +345,21 @@ function resolveClass(index, source, name) {
 }
 
 function isSmallFactory(source, receiver, caret) {
-  const prefix = maskComments(source.slice(0, caret));
-  const key = receiver.replace(/^\$this->|^\$/, '');
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Typed properties, promoted parameters, method parameters and @var declarations.
-  const type = /(?:EntityManagerFactory|EntityManagerFactoryInterface)/.source;
-  const typed = new RegExp(type + '\\s+\\$' + escaped + '\\b');
-  return typed.test(prefix);
+  const prefix = maskComments(source.slice(0,caret));
+  const property = receiver.replace(/^\$this->|^\$/,'');
+  const typed = new RegExp('\\b([\\\\\\w]+)\\s+\\$' + escapeRegExp(property) + '\\b','g');
+  const types = [...prefix.matchAll(typed)];
+  if (!types.length) {
+    // Preserve the common untyped $factory idiom, but do not infer ORM semantics from $cache->get().
+    return /^\$(?:factory|entityManagerFactory)$/.test(receiver);
+  }
+  return types.some(match => {
+    const value = match[1].replace(/^\\/,'');
+    if (/^Small\\SwooleEntityManager(?:Bundle)?\\(?:Factory|Contract)\\EntityManagerFactory(?:Interface)?$/.test(value)) return true;
+    if (value === 'EntityManagerFactory' || value === 'EntityManagerFactoryInterface') return true;
+    const declared = [...source.matchAll(/(?:^|\n)\s*use\s+(Small\\SwooleEntityManager(?:Bundle)?\\(?:Factory|Contract)\\EntityManagerFactory(?:Interface)?)(?:\s+as\s+(\w+))?\s*;/g)];
+    return declared.some(entry => (entry[2] || entry[1].split('\\').at(-1)) === value);
+  });
 }
 
 module.exports = {

@@ -49,7 +49,7 @@ function getCompletions(index, source, caret) {
       kind: 'manager'
     }));
   }
-  const context = aliasMapForQuery(index, source, caret, call.receiver);
+  const context = aliasMapForQuery(index, source, caret, call.receiver, call.inlineRootAlias);
   if (!context) return [];
   if (call.method === 'setParameter' && call.argumentIndex === 0) {
     return parameterSuggestions(source, range, caret, call.receiver);

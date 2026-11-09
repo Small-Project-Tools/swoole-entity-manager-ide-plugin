@@ -2,11 +2,13 @@
 'use strict';
 
 const path = require('node:path');
+const fs = require('node:fs');
 const vscode = require('vscode');
 const { readIndex, IndexCache } = require('./core');
 const { withManagerMethods } = require('./manager-methods');
 const { activeCall } = require('./context');
 const { getCompletions } = require('./completion');
+const { definitionAt } = require('./navigation');
 
 function activate(context) {
   const output = vscode.window.createOutputChannel('Small Entity Manager');
@@ -48,7 +50,7 @@ function activate(context) {
       async provideCompletionItems(document, position, token) {
         const source = document.getText();
         const caret = document.offsetAt(position);
-        if (!activeCall(source, caret) && !/(\$this->\w+|\$\w+)\s*->\s*\w*$/.test(source.slice(0, caret))) return [];
+        if (!activeCall(source, caret) && !/(\$this->\w+(?:\(\s*\))?|\$\w+)\s*->\s*\w*$/.test(source.slice(0, caret))) return [];
         const folder = vscode.workspace.getWorkspaceFolder(document.uri);
         if (!folder) return [];
         try {
@@ -78,6 +80,37 @@ function activate(context) {
       }
     }, "'", '"', '(', ',', '>')
   );
+
+  context.subscriptions.push(vscode.languages.registerDefinitionProvider(
+    { language: 'php', scheme: 'file' },
+    {
+      async provideDefinition(document, position, token) {
+        const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+        if (!folder) return undefined;
+        const source = document.getText();
+        const caret = document.offsetAt(position);
+        if (!activeCall(source,caret)) return undefined;
+        try {
+          const metadata = await index.get(folder.uri.fsPath);
+          if (token.isCancellationRequested) return undefined;
+          const target = definitionAt(metadata,source,caret);
+          if (!target || !target.entry?.file || !Number.isInteger(target.entry.line)) return undefined;
+          const realRoot = fs.realpathSync(folder.uri.fsPath);
+          const realFile = fs.realpathSync(path.resolve(realRoot,target.entry.file));
+          // Never navigate outside the selected workspace, even through symlinks.
+          if (!realFile.startsWith(realRoot + path.sep)) return undefined;
+          if (!fs.statSync(realFile).isFile()) return undefined;
+          return new vscode.Location(
+            vscode.Uri.file(realFile),
+            new vscode.Position(Math.max(0,target.entry.line - 1),0)
+          );
+        } catch (error) {
+          output.appendLine('Definition unavailable: ' + String(error));
+          return undefined;
+        }
+      }
+    }
+  ));
 
   context.subscriptions.push(vscode.commands.registerCommand('smallEntityManager.refreshIndex', async () => {
     index.invalidateAll();

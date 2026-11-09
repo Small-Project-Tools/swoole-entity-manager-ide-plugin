@@ -2,7 +2,7 @@
   "name": "small-entity-manager-vscode",
   "displayName": "Small Entity Manager",
   "description": "Static ORM completion for Small Swoole Entity Manager in PHP projects",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "small-project",
   "license": "MIT",
   "private": true,
