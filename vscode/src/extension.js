@@ -14,6 +14,7 @@ function activate(context) {
   const config = () => vscode.workspace.getConfiguration('smallEntityManager');
   const index = new IndexCache(async workspacePath => withManagerMethods(await readIndex({
     phpExecutable: config().get('phpExecutable', 'php'),
+    mode: config().get('indexingMode', 'native'),
     cliPath,
     workspacePath
   }), workspacePath));

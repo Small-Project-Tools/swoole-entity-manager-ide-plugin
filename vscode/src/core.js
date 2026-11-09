@@ -3,9 +3,29 @@
 
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
+const { Worker } = require('node:worker_threads');
+const path = require('node:path');
 const run = promisify(execFile);
 
-async function readIndex({ phpExecutable, cliPath, workspacePath, exec = run }) {
+async function readNativeIndex(workspacePath, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(path.join(__dirname, '..', 'dist', 'native-worker.js'), {workerData: {root:workspacePath}});
+    const timeout = setTimeout(() => { worker.terminate(); reject(new Error('Small ORM native indexing timed out.')); }, timeoutMs);
+    let settled = false;
+    const complete = (error, result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (error) reject(error); else resolve(result);
+    };
+    worker.once('message', message => message.error ? complete(new Error(message.error)) : complete(null, message.index));
+    worker.once('error', error => complete(error));
+    worker.once('exit', code => {if (!settled) complete(new Error('Small ORM indexing worker exited: ' + code));});
+  });
+}
+
+async function readIndex({ phpExecutable, cliPath, workspacePath, exec = run, mode = 'php' }) {
+  if (mode === 'native') return readNativeIndex(workspacePath);
   const { stdout } = await exec(phpExecutable, [cliPath, 'index', workspacePath], {
     cwd: workspacePath,
     timeout: 30000,
@@ -58,4 +78,4 @@ class IndexCache {
   }
 }
 
-module.exports = { readIndex, IndexCache };
+module.exports = { readIndex, readNativeIndex, IndexCache };

@@ -2,38 +2,81 @@
   "name": "small-entity-manager-vscode",
   "displayName": "Small Entity Manager",
   "description": "Static ORM completion for Small Swoole Entity Manager in PHP projects",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "small-project",
   "license": "MIT",
   "private": true,
-  "engines": { "vscode": "^1.95.0" },
-  "categories": ["Programming Languages", "Other"],
-  "keywords": ["Small", "Swoole", "PHP", "ORM", "completion"],
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "Small",
+    "Swoole",
+    "PHP",
+    "ORM",
+    "completion"
+  ],
   "main": "./src/extension.js",
-  "extensionKind": ["workspace"],
-  "activationEvents": ["onLanguage:php", "onCommand:smallEntityManager.refreshIndex", "onCommand:smallEntityManager.showDiagnostics"],
-  "repository": { "type": "git", "url": "https://git.small-project.dev/pub/ide/small-entity-manager-ide-core.git" },
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onLanguage:php",
+    "onCommand:smallEntityManager.refreshIndex",
+    "onCommand:smallEntityManager.showDiagnostics"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://git.small-project.dev/pub/ide/small-entity-manager-ide-core.git"
+  },
   "contributes": {
     "commands": [
-      { "command": "smallEntityManager.refreshIndex", "title": "Small Entity Manager: Refresh Index" },
-      { "command": "smallEntityManager.showDiagnostics", "title": "Small Entity Manager: Diagnose Completion" }
+      {
+        "command": "smallEntityManager.refreshIndex",
+        "title": "Small Entity Manager: Refresh Index"
+      },
+      {
+        "command": "smallEntityManager.showDiagnostics",
+        "title": "Small Entity Manager: Diagnose Completion"
+      }
     ],
     "configuration": {
       "title": "Small Entity Manager",
       "properties": {
         "smallEntityManager.phpExecutable": {
-          "type": "string", "default": "php", "scope": "machine",
-          "description": "Path to a PHP 8.4+ executable in the VS Code extension host; used only for read-only static indexing."
+          "type": "string",
+          "default": "php",
+          "scope": "machine",
+          "description": "PHP 8.4+ executable used only when indexingMode=php."
+        },
+        "smallEntityManager.indexingMode": {
+          "type": "string",
+          "enum": [
+            "native",
+            "php"
+          ],
+          "default": "native",
+          "scope": "resource",
+          "description": "Static ORM indexer: native JavaScript (no PHP required), or PHP 8.4+ CLI fallback."
         }
       }
     }
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "test": "npm run build:native && node --test test/*.test.js",
     "bundle-core": "node scripts/bundle-core.js",
-    "package:vsix": "npm run test && npm run bundle-core && vsce package --no-dependencies"
+    "package:vsix": "npm run test && npm run bundle-core && vsce package --no-dependencies",
+    "build:native": "esbuild src/native-worker.js --bundle --platform=node --target=node18 --outfile=dist/native-worker.js"
   },
   "devDependencies": {
-    "@vscode/vsce": "3.6.0"
+    "@vscode/vsce": "3.6.0",
+    "esbuild": "0.25.12"
+  },
+  "dependencies": {
+    "php-parser": "3.7.0"
   }
 }

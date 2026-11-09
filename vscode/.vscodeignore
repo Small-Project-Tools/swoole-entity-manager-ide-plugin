@@ -5,3 +5,5 @@ test/**
 scripts/**
 *.vsix
 *.log
+src/native-index.js
+src/native-worker.js
