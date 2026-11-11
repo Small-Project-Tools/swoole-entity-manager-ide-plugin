@@ -27,7 +27,9 @@ class SmallCompletionContributor : CompletionContributor(), DumbAware {
         if (offset > QueryContextResolver.MAX_SOURCE_LENGTH) return
 
         val source = document.charsSequence.subSequence(0, offset).toString()
-        val context = QueryContextResolver.resolve(source)
+        val afterCaret = document.charsSequence
+            .subSequence(offset, minOf(document.textLength, offset + 4096)).toString()
+        val context = QueryContextResolver.resolve(source, afterCaret)
         SmallCompletionTelemetry.recordContext(context)
         if (context == null) return
         val completion = result.withPrefixMatcher(context.typedPrefix)

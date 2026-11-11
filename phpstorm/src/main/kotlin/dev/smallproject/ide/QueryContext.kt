@@ -55,7 +55,7 @@ object QueryContextResolver {
         return imports[shortName] ?: shortName
     }
 
-    fun resolve(sourceBeforeCaret: String): QueryContext? {
+    fun resolve(sourceBeforeCaret: String, sourceAfterCaret: String = ""): QueryContext? {
         if (sourceBeforeCaret.length > MAX_SOURCE_LENGTH) return null
         val call = activeCall(sourceBeforeCaret) ?: return null
         val parts = splitArgs(sourceBeforeCaret.substring(call.open + 1))
@@ -163,6 +163,9 @@ object QueryContextResolver {
             }.toList()
             (builderJoins[variable].orEmpty() + mutations).distinct()
         }
+        val explicitFieldAlias = if (role == "field") {
+            resolveFieldAlias(call.method, sourceBeforeCaret.substring(call.open + 1), sourceAfterCaret)
+        } else null
         val relationSourceAlias = if (role == "relation") {
             val first = parts.firstOrNull()?.trim()?.substringAfter(':')?.trim().orEmpty()
             Regex("""^(['"])([^'"]+)\1$""").matchEntire(first)?.groupValues?.get(2)
@@ -173,7 +176,7 @@ object QueryContextResolver {
             kind = role,
             manager = target.first,
             rootAlias = target.second,
-            alias = relationSourceAlias,
+            alias = explicitFieldAlias ?: relationSourceAlias,
             joins = joins,
             parameters = parameters,
             typedPrefix = typed,
@@ -183,6 +186,24 @@ object QueryContextResolver {
                 importMap.entries.firstOrNull { it.value == type }?.key ?: "\\$type"
             } else null,
         )
+    }
+
+    /**
+     * Field completion may occur in the middle of the first argument while an
+     * already-written entityAlias appears after the caret. Inspect only this
+     * call's arguments, never a later call in the document.
+     */
+    private fun resolveFieldAlias(method: String, beforeCaret: String, afterCaret: String): String? {
+        if (method != "getFieldForCondition" && method != "addOrderBy") return null
+        val call = "($beforeCaret${afterCaret.take(4096)}"
+        val close = closingParen(call, 0) ?: call.length
+        val arguments = splitArgs(call.substring(1, close))
+        val namedLiteral = Regex("""^entityAlias\s*:\s*(['"])([A-Za-z_]\w*)\1$""")
+        val literal = Regex("""^(['"])([A-Za-z_]\w*)\1$""")
+        val named = arguments.mapNotNull { namedLiteral.matchEntire(it.trim())?.groupValues?.get(2) }
+        if (named.size > 1) return null
+        if (named.isNotEmpty()) return named.single()
+        return arguments.getOrNull(1)?.trim()?.let { literal.matchEntire(it)?.groupValues?.get(2) }
     }
 
     /** Argument names/positions correspond to the Core 3 method signatures. */
