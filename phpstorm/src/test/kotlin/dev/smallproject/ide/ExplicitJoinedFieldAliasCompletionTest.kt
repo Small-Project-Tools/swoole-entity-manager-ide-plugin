@@ -14,7 +14,7 @@ class ExplicitJoinedFieldAliasCompletionTest {
         val source = """
             <?php
             namespace Demo;
-            use Demo\\EntityManager\\UserManager;
+            use Demo\EntityManager\UserManager;
             ${'$'}manager = ${'$'}factory->get(UserManager::class);
             ${'$'}query = ${'$'}manager->createQueryBuilder('user');
             ${'$'}query->leftJoin('user', 'company', 'c')->endJoin();
