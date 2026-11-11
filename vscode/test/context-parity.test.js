@@ -391,3 +391,64 @@ test('aliased Small factory import continues to resolve managers', () => {
     '}'
   ]), ['CompanyManager', 'UserManager']);
 });
+
+test('factory inference accepts reordered named managerClass after new', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'function run(\\Small\\SwooleEntityManagerBundle\\Contract\\EntityManagerFactoryInterface $factory) {',
+    '  $manager = $factory->get(new: true, managerClass: UserManager::class);',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->getFieldForCondition('<caret>');",
+    '}'
+  ]), ['email', 'id']);
+});
+
+test('core factory inference accepts reordered named manager after new', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'function run(\\Small\\SwooleEntityManager\\Factory\\EntityManagerFactory $factory) {',
+    '  $manager = $factory->get(new: true, manager: UserManager::class);',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->getFieldForCondition('<caret>');",
+    '}'
+  ]), ['email', 'id']);
+});
+
+test('reordered named factory arguments work inside controller accessors', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'use Small\\SwooleEntityManagerBundle\\Contract\\EntityManagerFactoryInterface;',
+    'class Handler {',
+    '  public function __construct(private EntityManagerFactoryInterface $factory) {}',
+    '  private function userManager(): AbstractManager {',
+    '    return $this->factory->get(new: true, managerClass: UserManager::class);',
+    '  }',
+    '  public function run() {',
+    "    $query = $this->userManager()->createQueryBuilder('u');",
+    "    $query->getFieldForCondition('<caret>');",
+    '  }',
+    '}'
+  ]), ['email', 'id']);
+});
+
+test('dynamic factory manager expressions never guess mapped managers', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'function run(\\Small\\SwooleEntityManager\\Factory\\EntityManagerFactory $factory, string $class) {',
+    '  $manager = $factory->get(new: true, manager: $class);',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->getFieldForCondition('<caret>');",
+    '}'
+  ]), []);
+});
+
+test('duplicate named manager specifications are rejected', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\{UserManager, CompanyManager};',
+    'function run(\\Small\\SwooleEntityManager\\Factory\\EntityManagerFactory $factory) {',
+    '  $manager = $factory->get(manager: UserManager::class, managerClass: CompanyManager::class);',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->getFieldForCondition('<caret>');",
+    '}'
+  ]), []);
+});

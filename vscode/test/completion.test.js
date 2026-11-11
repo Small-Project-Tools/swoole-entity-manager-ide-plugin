@@ -205,3 +205,16 @@ test('unknown qualified projection alias never falls back to root fields', () =>
   const result = testAt("  $query->select('missing.<caret>');\n}");
   assert.deepEqual(labels(result), []);
 });
+
+test('factory class-string completion supports named manager after new', () => {
+  const base = [
+    '<?php',
+    'use Demo\\EntityManager\\UserManager;',
+    'function run(\\Small\\SwooleEntityManagerBundle\\Contract\\EntityManagerFactoryInterface $factory) {',
+    ''
+  ].join('\n');
+  const result = testAt('  $factory->get(new: true, managerClass: Us<caret>);\n}', base);
+  assert.ok(labels(result).includes('UserManager'));
+  assert.equal(result.proposals.find(x => x.label === 'UserManager')?.insertText,
+    '\\Demo\\EntityManager\\UserManager::class');
+});

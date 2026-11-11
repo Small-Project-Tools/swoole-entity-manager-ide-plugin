@@ -90,3 +90,9 @@ test('F12 resolves relation from named join arguments even when reordered', () =
   assert.equal(found?.name, 'company');
   assert.equal(found?.entry?.line, 21);
 });
+
+test('F12 resolves reordered named class-string in Small factory get', () => {
+  const found = select(["  $factory->get(new: true, manager: UserMan<caret>ager::class);", '}']);
+  assert.equal(found?.name, 'Demo\\Manager\\UserManager');
+  assert.equal(found?.entry?.line, 11);
+});

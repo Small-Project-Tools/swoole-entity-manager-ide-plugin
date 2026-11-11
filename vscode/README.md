@@ -46,7 +46,7 @@ function demo(EntityManagerFactory $factory): void {
 
 ### Context resolution and navigation (0.4.0)
 
-- Recognize managers returned by typed controller accessors, PHPDoc `@var` declarations, and promoted typed properties. Accessors with abstract return types resolve local delegated calls only when all supported return branches identify the same mapped manager.
+- Recognize managers returned by typed controller accessors, PHPDoc `@var` declarations, and promoted typed properties. Factory resolution supports the Small Core `manager:` and Symfony Bundle `managerClass:` names even when `new:` precedes them. Accessors with abstract return types resolve local delegated calls only when all supported return branches identify the same mapped manager.
 - Support fields on simple inline builders created by createQueryBuilder and from typed controller accessors.
 - Track an inline join in a query assignment and handle the default entity alias when createQueryBuilder has no arguments.
 - Resolve `$this->createQueryBuilder()` inside the matching indexed manager class, without inferring a manager from unrelated classes or namespaces.

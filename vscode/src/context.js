@@ -282,6 +282,30 @@ function aliasMapForQuery(index, source, caret, receiver, inlineRootAlias = unde
   return {manager,rootAlias,aliases};
 }
 
+/** Parse the Small factory class-string without evaluating any PHP expression. */
+function factoryManagerClassArgument(argumentsText) {
+  if (argumentsText === null) return null;
+  const argumentsList = splitArguments(argumentsText).map(part => part.text.trim());
+  const managerNamed = [];
+  const positional = [];
+  let seenNamed = false;
+  for (const argument of argumentsList) {
+    const named = /^([A-Za-z_]\w*)\s*:(?!:)\s*(.*)$/s.exec(argument);
+    if (named) {
+      seenNamed = true;
+      if (named[1] === 'manager' || named[1] === 'managerClass') managerNamed.push(named[2]);
+      else if (named[1] !== 'new') return null;
+    } else {
+      if (seenNamed) return null;
+      positional.push(argument);
+    }
+  }
+  if (managerNamed.length > 1 || (managerNamed.length && positional.length)) return null;
+  const target = managerNamed[0] || positional[0];
+  const match = /^([\\\w]+)\s*::\s*class$/i.exec(target || '');
+  return match ? match[1] : null;
+}
+
 function resolveManagerFromAccessor(index, source, caret, accessor, visited) {
   if (visited.has(accessor) || visited.size >= 5) return null;
   const ancestors = new Set(visited);
@@ -313,13 +337,14 @@ function resolveManagerFromAccessor(index, source, caret, accessor, visited) {
     let concrete = null;
     const property = /^\$this->([A-Za-z_]\w*)$/.exec(expression);
     const delegate = /^\$this->([A-Za-z_]\w*)\s*\(\s*\)$/.exec(expression);
-    const directFactory = /^(\$(?:this->)?[A-Za-z_]\w*)\s*->\s*get\s*\(\s*(?:(?:manager|managerClass)\s*:\s*)?([\\\w]+)\s*::\s*class\s*\)$/.exec(expression);
+    const directFactory = /^(\$(?:this->)?[A-Za-z_]\w*)\s*->\s*get\s*\(([\s\S]*)\)$/.exec(expression);
     if (property) {
       concrete = resolveManagerForVariable(index, source, caret, '$this->' + property[1], ancestors);
     } else if (delegate) {
       concrete = resolveManagerFromAccessor(index, source, caret, delegate[1], ancestors);
     } else if (directFactory && isSmallFactory(source, directFactory[1], caret)) {
-      concrete = resolveClass(index, source, directFactory[2]);
+      const manager = factoryManagerClassArgument(directFactory[2]);
+      if (manager) concrete = resolveClass(index, source, manager);
     }
     if (!concrete) return null;
     targets.add(concrete);
@@ -358,13 +383,14 @@ function resolveManagerForVariable(index, source, caret, variable, visited = new
   const functions = [...prefix.matchAll(/\bfunction\s+\w+\s*\(/g)];
   const scope = functions.length ? prefix.slice(functions.at(-1).index) : prefix;
   const factories = new RegExp('\\$' + escaped +
-    '\\s*=\\s*(\\$this->\\w+|\\$\\w+)\\s*->\\s*get\\s*\\(\\s*' +
-    '(?:(?:manager|managerClass)\\s*:\\s*)?([\\\\\\w]+)::class','g');
+    '\\s*=\\s*(\\$this->\\w+|\\$\\w+)\\s*->\\s*get\\s*\\(', 'g');
   const fromFactory = [...maskStrings(scope).matchAll(factories)];
   if (fromFactory.length) {
     const selected = fromFactory.at(-1);
-    if (!isSmallFactory(source,selected[1],caret)) return null;
-    return resolveClass(index,source,selected[2]);
+    if (!isSmallFactory(source, selected[1], caret)) return null;
+    const args = parseCallArguments(scope, selected.index + selected[0].length - 1);
+    const manager = factoryManagerClassArgument(args);
+    return manager ? resolveClass(index, source, manager) : null;
   }
   const accessor = new RegExp('\\$' + escaped +
     '\\s*=\\s*(\\$this->\\w+\\(\\s*\\))\\s*;','g');
