@@ -134,3 +134,31 @@ test('realpath traversal through a symlink cannot read external manager code', (
     fs.rmSync(other, {recursive:true,force:true});
   }
 });
+
+test('parameter completion remains in the current PHP function', () => {
+  const prefix = [
+    '<?php use Demo\\UserManager;',
+    'function old(UserManager $manager) {',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->where()->firstCondition($query->getFieldForCondition('email'), ConditionOperatorType::equal, ':oldName');",
+    '}',
+    'function run(UserManager $manager) {',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->where()->firstCondition($query->getFieldForCondition('email'), ConditionOperatorType::equal, ':currentName');",
+    ''].join('\n');
+  const result = at("  $query->setParameter('<caret>', 1);\n}", prefix);
+  assert.deepEqual(labels(result), ['currentName']);
+});
+
+test('parameter completion ignores commented placeholders', () => {
+  const prefix = [
+    '<?php use Demo\\UserManager;',
+    'function run(UserManager $manager) {',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  // $query->setParameter('commentedOut', 'ignored');",
+    "  /* $query->where()->firstCondition(':hidden'); */",
+    "  $query->where()->firstCondition($query->getFieldForCondition('email'), ConditionOperatorType::equal, ':visible');",
+    ''].join('\n');
+  const result = at("  $query->setParameter('<caret>', 1);\n}", prefix);
+  assert.deepEqual(labels(result), ['visible']);
+});

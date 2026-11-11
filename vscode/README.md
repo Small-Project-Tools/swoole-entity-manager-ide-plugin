@@ -38,7 +38,7 @@ function demo(EntityManagerFactory $factory): void {
 
 - Condition expressions for `firstCondition`, `andCondition`, `orCondition` and `xorCondition` with mapped root and joined fields.
 - All 15 `ConditionOperatorType` cases from the Small core, with fully qualified insertion and enum-case suffix completion.
-- Named `setParameter()` placeholder completion; aggregated fields (`count`, `sum`, `avg`, `min`, `max`) and `addFieldToUpdate()`.
+- Named `setParameter()` placeholder completion scoped to the current PHP function (ignoring comments and other methods); aggregated fields (`count`, `sum`, `avg`, `min`, `max`) and `addFieldToUpdate()`.
 - Completion of public methods on typed local managers, including workspace-specific, inherited and trait methods (static AST scan; protected/private and static methods are excluded).
 - Grouped PHP imports, named argument positions, promoted manager properties and explicit joined aliases.
 - The native JavaScript indexer supplies entity, manager and public-method metadata by default. The read-only PHP CLI remains an explicitly selected fallback.

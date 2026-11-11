@@ -58,11 +58,20 @@ function conditionSuggestions(index, source, caret, call, range) {
 }
 
 function parameterSuggestions(source, range, caret, receiver, withColon = false) {
-  // Local placeholders only: never guess values from arbitrary identifiers.
+  // PhpStorm parity: only inspect the current local function, not the whole file.
   const prefix = source.slice(0, caret);
+  const executable = maskStrings(maskComments(prefix));
+  const functions = [...executable.matchAll(/\bfunction\s*(?:&\s*)?(?:[A-Za-z_]\w*)?\s*\(/g)];
+  const start = functions.length ? functions.at(-1).index : 0;
+  const local = maskComments(prefix.slice(start));
+  const localExecutable = executable.slice(start);
   const found = new Set();
-  for (const match of prefix.matchAll(/(['"]):([A-Za-z_]\w*)\1/g)) found.add(match[2]);
-  for (const match of prefix.matchAll(/\bsetParameter\s*\(\s*(['"])([A-Za-z_]\w*)\1/g)) found.add(match[2]);
+  for (const match of local.matchAll(/(['"]):([A-Za-z_]\w*)\1/g)) found.add(match[2]);
+  for (const match of localExecutable.matchAll(/\bsetParameter\s*\(/g)) {
+    const tail = local.slice(match.index + match[0].length);
+    const argument = /^\s*(?:name\s*:\s*)?(['"])([A-Za-z_]\w*)\1/.exec(tail);
+    if (argument) found.add(argument[2]);
+  }
   return [...found].sort().map(label => ({
     label, kind: 'parameter',
     insertText: range.quoted ? (withColon ? ':' : '') + label : `'${withColon ? ':' : ''}${label}'`,
