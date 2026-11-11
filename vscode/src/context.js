@@ -111,7 +111,7 @@ function activeCall(source, caret) {
   const sanitized = maskStrings(maskComments(source.slice(0,caret)));
   const re = /(\$this->\w+|\$\w+)\s*->\s*(\w+)\s*\(/g;
   const chained = /(\$this->\w+|\$\w+)\s*->\s*where\s*\(\s*\)\s*->\s*(firstCondition|andCondition|orCondition|xorCondition)\s*\(/g;
-  const inline = /(\$this->\w+(?:\(\s*\))?|\$\w+)\s*->\s*(?:createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder)\s*\([^()]*\)\s*->\s*(\w+)\s*\(/g;
+  const inline = /(\$this->\w+(?:\(\s*\))?|\$\w+)\s*->\s*(?:createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\([^()]*\)\s*->\s*(\w+)\s*\(/g;
   let found = null;
   const consider = (match,method,receiver,inlineRootAlias) => {
     if (!SUPPORTED_METHODS.has(method)) return;
@@ -130,7 +130,7 @@ function activeCall(source, caret) {
   for (const match of sanitized.matchAll(re)) consider(match,match[2],match[1]);
   for (const match of sanitized.matchAll(chained)) consider(match,match[2],match[1]);
   for (const match of sanitized.matchAll(inline)) {
-    const builderMatch = /->\s*(?:createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder)\s*\(/.exec(match[0]);
+    const builderMatch = /->\s*(?:createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)\s*\(/.exec(match[0]);
     if (!builderMatch) continue;
     const builderOpen = match.index + builderMatch.index + builderMatch[0].length - 1;
     const builderArgs = parseCallArguments(source,builderOpen);
@@ -149,16 +149,48 @@ function escapeRegExp(value) {
   return value.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
 }
 
-/** Only consult declarations of the class containing the caret, never a later class. */
+/** Return the matching brace within sanitized PHP source. */
+function matchingBrace(source, open) {
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    if (source[i] === '}' && --depth === 0) return i;
+  }
+  return -1;
+}
+
+/** Restrict local accessor and property inference to the class under the caret. */
 function currentClassSource(source, caret) {
   const masked = maskStrings(maskComments(source));
-  const classes = [...masked.slice(0,caret).matchAll(/\b(?:class|trait)\s+[A-Za-z_]\w*\b/g)];
-  if (!classes.length) return '';
-  const start = classes.at(-1).index;
-  const next = /\b(?:class|trait)\s+[A-Za-z_]\w*\b/g;
-  next.lastIndex = start + classes.at(-1)[0].length;
-  const following = next.exec(masked);
-  return source.slice(start, following ? following.index : source.length);
+  let range = null;
+  for (const match of masked.matchAll(/\b(?:class|trait)\s+[A-Za-z_]\w*\b/g)) {
+    const start = match.index + match[0].length;
+    const open = masked.indexOf('{', start);
+    const semicolon = masked.indexOf(';', start);
+    if (open < 0 || (semicolon >= 0 && semicolon < open)) continue;
+    const close = matchingBrace(masked, open);
+    if (open < caret && (close < 0 || caret <= close)) {
+      if (!range || match.index > range.start) {
+        range = { start: match.index, end: close < 0 ? source.length : close + 1 };
+      }
+    }
+  }
+  return range ? source.slice(range.start, range.end) : '';
+}
+
+/** Only @var inside a PHPDoc block at the beginning of a line is trusted. */
+function documentedManagerType(source, scopeStart, caret, variable) {
+  const section = source.slice(scopeStart, caret);
+  const pattern = new RegExp('@var\\s+\\??([\\\\\\w]+)\\s+\\$' + escapeRegExp(variable) + '\\b', 'g');
+  let last = null;
+  for (const block of section.matchAll(/\/\*\*([\s\S]*?)\*\//g)) {
+    const lineStart = section.lastIndexOf('\n', block.index) + 1;
+    // Ignore string literals and single-line comments containing fake PHPDoc.
+    if (!/^[ \t]*$/.test(section.slice(lineStart, block.index))) continue;
+    const annotations = [...block[1].matchAll(pattern)];
+    if (annotations.length) last = annotations.at(-1)[1];
+  }
+  return last;
 }
 
 function parseCallArguments(source, open) {
@@ -232,7 +264,7 @@ function aliasMapForQuery(index, source, caret, receiver, inlineRootAlias = unde
   const variableName = receiver.slice(1);
   const pattern = new RegExp('\\$' + escapeRegExp(variableName) +
     '\\s*=\\s*(\\$this->\\w+(?:\\(\\s*\\))?|\\$\\w+)\\s*->\\s*' +
-    '(?:createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder)' +
+    '(?:createQueryBuilder|createScallarQueryBuilder|createStatsQueryBuilder|createUpdateBuilder|createDeleteBuilder)' +
     '\\s*\\(\\s*(?:([\\x27"])([A-Za-z_]\\w*)\\2)?\\s*\\)', 'g');
   const bindings = [...scope.matchAll(pattern)];
   if (!bindings.length) return null;
@@ -251,32 +283,62 @@ function aliasMapForQuery(index, source, caret, receiver, inlineRootAlias = unde
 }
 
 function resolveManagerFromAccessor(index, source, caret, accessor, visited) {
-  if (visited.has(accessor)) return null;
-  visited.add(accessor);
-  const classText = currentClassSource(source,caret);
+  if (visited.has(accessor) || visited.size >= 5) return null;
+  const ancestors = new Set(visited);
+  ancestors.add(accessor);
+  const classText = currentClassSource(source, caret);
   if (!classText) return null;
   const escaped = escapeRegExp(accessor);
-  const declaration = new RegExp('\\bfunction\\s+' + escaped +
-    '\\s*\\([^)]*\\)\\s*(?::\\s*\\??([\\\\\\w]+))?\\s*\\{','g');
-  const matches = [...classText.matchAll(declaration)];
+  // A zero-argument accessor must not be inferred from a method requiring arguments.
+  const declaration = new RegExp('\\bfunction\\s+(?:&\\s*)?' + escaped +
+    '\\s*\\(\\s*\\)\\s*(?::\\s*\\??([\\\\\\w|&]+))?\\s*\\{', 'g');
+  const executableClass = maskStrings(maskComments(classText));
+  const matches = [...executableClass.matchAll(declaration)];
   if (matches.length !== 1) return null;
   const matched = matches[0];
   if (matched[1]) {
-    const typed = resolveClass(index,source,matched[1]);
+    const typed = resolveClass(index, source, matched[1]);
     if (typed) return typed;
   }
   const open = matched.index + matched[0].length - 1;
-  const remaining = classText.slice(open + 1);
-  const close = maskStrings(maskComments(remaining)).indexOf('}');
-  const body = remaining.slice(0,close < 0 ? 3000 : close);
-  const property = /\breturn\s+(\$this->\w+)\s*;/.exec(body);
-  if (property) return resolveManagerForVariable(index,source,caret,property[1],visited);
-  const byFactory = /\breturn\s+(\$this->\w+)\s*->\s*get\s*\(\s*(?:(?:manager|managerClass)\s*:\s*)?([\\\w]+)::class/.exec(body);
-  if (byFactory && isSmallFactory(source,byFactory[1],caret)) return resolveClass(index,source,byFactory[2]);
-  return null;
+  const close = matchingBrace(executableClass, open);
+  if (close < 0) return null;
+  const body = executableClass.slice(open + 1, close);
+  const returns = [...body.matchAll(/\breturn\s+([^;]*);/g)];
+  // Every return must resolve to the same mapped manager.
+  if (!returns.length || returns.length !== [...body.matchAll(/\breturn\b/g)].length) return null;
+  const targets = new Set();
+  for (const found of returns) {
+    const expression = found[1].trim();
+    let concrete = null;
+    const property = /^\$this->([A-Za-z_]\w*)$/.exec(expression);
+    const delegate = /^\$this->([A-Za-z_]\w*)\s*\(\s*\)$/.exec(expression);
+    const directFactory = /^(\$(?:this->)?[A-Za-z_]\w*)\s*->\s*get\s*\(\s*(?:(?:manager|managerClass)\s*:\s*)?([\\\w]+)\s*::\s*class\s*\)$/.exec(expression);
+    if (property) {
+      concrete = resolveManagerForVariable(index, source, caret, '$this->' + property[1], ancestors);
+    } else if (delegate) {
+      concrete = resolveManagerFromAccessor(index, source, caret, delegate[1], ancestors);
+    } else if (directFactory && isSmallFactory(source, directFactory[1], caret)) {
+      concrete = resolveClass(index, source, directFactory[2]);
+    }
+    if (!concrete) return null;
+    targets.add(concrete);
+    if (targets.size > 1) return null;
+  }
+  return targets.values().next().value || null;
 }
 
 function resolveManagerForVariable(index, source, caret, variable, visited = new Set()) {
+  if (variable === '$this') {
+    const containing = currentClassSource(source, caret);
+    const declared = /^class\s+([A-Za-z_]\w*)\b/.exec(containing);
+    if (!declared) return null;
+    const namespaces = [...source.slice(0, caret).matchAll(/\bnamespace\s+([\\\w]+)\s*;/g)];
+    const namespace = namespaces.at(-1)?.[1] || '';
+    const candidate = namespace ? namespace + '\\' + declared[1] : declared[1];
+    // Do not use unique-basename fallback for $this: it would cross namespaces.
+    return Object.hasOwn(index.managers, candidate) ? candidate : null;
+  }
   if (/^\$this->\w+\(\s*\)$/.test(variable)) {
     return resolveManagerFromAccessor(index,source,caret,
       variable.slice('$this->'.length).replace(/\(\s*\)$/,''),visited);
@@ -298,7 +360,7 @@ function resolveManagerForVariable(index, source, caret, variable, visited = new
   const factories = new RegExp('\\$' + escaped +
     '\\s*=\\s*(\\$this->\\w+|\\$\\w+)\\s*->\\s*get\\s*\\(\\s*' +
     '(?:(?:manager|managerClass)\\s*:\\s*)?([\\\\\\w]+)::class','g');
-  const fromFactory = [...scope.matchAll(factories)];
+  const fromFactory = [...maskStrings(scope).matchAll(factories)];
   if (fromFactory.length) {
     const selected = fromFactory.at(-1);
     if (!isSmallFactory(source,selected[1],caret)) return null;
@@ -306,17 +368,15 @@ function resolveManagerForVariable(index, source, caret, variable, visited = new
   }
   const accessor = new RegExp('\\$' + escaped +
     '\\s*=\\s*(\\$this->\\w+\\(\\s*\\))\\s*;','g');
-  const byAccessor = [...scope.matchAll(accessor)];
+  const byAccessor = [...maskStrings(scope).matchAll(accessor)];
   if (byAccessor.length) return resolveManagerForVariable(index,source,caret,byAccessor.at(-1)[1],visited);
   const typed = new RegExp('\\b([A-Za-z_][\\\\\\w]*)\\s+\\$' + escaped + '\\b','g');
-  const matches = [...prefix.matchAll(typed)];
+  const matches = [...maskStrings(prefix).matchAll(typed)];
   if (matches.length) return resolveClass(index,prefix,matches.at(-1)[1]);
-  // Recognize an explicit, workspace-local PHPDoc @var contract without executing PHP.
-  // Restrict the declaration to this variable and the current function scope.
-  const documented = new RegExp(String.raw`@var\s+([\\\w]+)\s+\$` + escaped + String.raw`\b`, 'g');
-  const originalScope = source.slice(caret - scope.length, caret);
-  const docMatches = [...originalScope.matchAll(documented)];
-  if (docMatches.length) return resolveClass(index,prefix,docMatches.at(-1)[1]);
+  // Keep PHPDoc inference scoped to actual annotation blocks in this function.
+  const scopeStart = caret - scope.length;
+  const documented = documentedManagerType(source, scopeStart, caret, variable.slice(1));
+  if (documented) return resolveClass(index, prefix, documented);
   return null;
 }
 
@@ -351,21 +411,33 @@ function resolveClass(index, source, name) {
 }
 
 function isSmallFactory(source, receiver, caret) {
-  const prefix = maskComments(source.slice(0,caret));
-  const property = receiver.replace(/^\$this->|^\$/,'');
-  const typed = new RegExp('\\b([\\\\\\w]+)\\s+\\$' + escapeRegExp(property) + '\\b','g');
+  const prefix = maskStrings(maskComments(source.slice(0, caret)));
+  const property = receiver.replace(/^\$this->|^\$/, '');
+  const typed = new RegExp('\\b([\\\\\\w]+)\\s+\\$' + escapeRegExp(property) + '\\b', 'g');
   const types = [...prefix.matchAll(typed)];
   if (!types.length) {
-    // Preserve the common untyped $factory idiom, but do not infer ORM semantics from $cache->get().
+    // Legacy projects use conventional variable names without declaring a factory type.
     return /^\$(?:factory|entityManagerFactory)$/.test(receiver);
   }
-  return types.some(match => {
-    const value = match[1].replace(/^\\/,'');
-    if (/^Small\\SwooleEntityManager(?:Bundle)?\\(?:Factory|Contract)\\EntityManagerFactory(?:Interface)?$/.test(value)) return true;
-    if (value === 'EntityManagerFactory' || value === 'EntityManagerFactoryInterface') return true;
-    const declared = [...source.matchAll(/(?:^|\n)\s*use\s+(Small\\SwooleEntityManager(?:Bundle)?\\(?:Factory|Contract)\\EntityManagerFactory(?:Interface)?)(?:\s+as\s+(\w+))?\s*;/g)];
-    return declared.some(entry => (entry[2] || entry[1].split('\\').at(-1)) === value);
-  });
+  const knownFactory = /^Small\\SwooleEntityManager(?:Bundle)?\\(?:Factory|Contract)\\EntityManagerFactory(?:Interface)?$/;
+  const value = types.at(-1)[1].replace(/^\\/, '');
+  if (knownFactory.test(value)) return true;
+
+  const imports = new Map();
+  const before = source.slice(0, caret);
+  for (const match of before.matchAll(/(?:^|\n)\s*use\s+([\\\w]+)(?:\s+as\s+(\w+))?\s*;/g)) {
+    imports.set(match[2] || match[1].split('\\').at(-1), match[1]);
+  }
+  for (const group of before.matchAll(/(?:^|\n)\s*use\s+([\\\w]+)\\\s*\{([^}]*)\}\s*;/g)) {
+    for (const part of group[2].split(',')) {
+      const match = /^\s*([\\\w]+)(?:\s+as\s+(\w+))?\s*$/.exec(part);
+      if (match) imports.set(match[2] || match[1].split('\\').at(-1), group[1] + '\\' + match[1]);
+    }
+  }
+  const first = value.split('\\')[0];
+  if (imports.has(first)) return knownFactory.test(imports.get(first) + value.slice(first.length));
+  // Unqualified factory names without explicit imports are retained for legacy code.
+  return value === 'EntityManagerFactory' || value === 'EntityManagerFactoryInterface';
 }
 
 module.exports = {

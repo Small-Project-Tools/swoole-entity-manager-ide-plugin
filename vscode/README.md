@@ -45,9 +45,12 @@ function demo(EntityManagerFactory $factory): void {
 
 ### Context resolution and navigation (0.4.0)
 
-- Recognize managers returned by typed controller accessors and from promoted typed properties; follow direct return statements for accessors declared with an abstract return type.
+- Recognize managers returned by typed controller accessors, PHPDoc `@var` declarations, and promoted typed properties. Accessors with abstract return types resolve local delegated calls only when all supported return branches identify the same mapped manager.
 - Support fields on simple inline builders created by createQueryBuilder and from typed controller accessors.
 - Track an inline join in a query assignment and handle the default entity alias when createQueryBuilder has no arguments.
+- Resolve `$this->createQueryBuilder()` inside the matching indexed manager class, without inferring a manager from unrelated classes or namespaces.
+- Complete fields for stored and inline `createDeleteBuilder()` expressions.
+- Require imported factory aliases to resolve to a known Small factory, not an unrelated class with the same short name.
 - Provide Go to Definition (F12) on mapped manager classes, fields and relations. All targets are checked to stay within the current workspace, including symlink resolution.
 - Avoid offering Small ORM fields after unrelated factory calls.
 
@@ -59,7 +62,7 @@ The native scanner uses `php-parser` to extract ORM attributes, manager/entity m
 
 The quoted shorthand `getFieldForCondition('owner.')` offers joined fields and inserts the supported two-argument form `getFieldForCondition('name', 'owner')`.
 
-This is a conservative static adapter, not PhpStorm PHP PSI. It now supports typed controller accessors, simple fluent inline builders and local inherited manager methods, but does not resolve arbitrary expression chains, all nested factory calls, or runtime-computed manager classes. It does not inject a native type provider into a separate PHP language server. Existing PHP language server integration is not modified. It does not suggest symbols for unresolved managers, and does not inject Small proposals into unrelated factory calls. The parser does not fully understand PHP heredoc syntax.
+This is a conservative static adapter, not PhpStorm PHP PSI. It now supports typed controller accessors, simple fluent inline builders and local inherited manager methods, but does not resolve arbitrary expression chains, all nested factory calls, or runtime-computed manager classes. It does not inject a native type provider into a separate PHP language server. Existing PHP language server integration is not modified. It does not suggest symbols for unresolved managers, recursive or ambiguous accessors, and does not inject Small proposals into unrelated factory calls. The parser does not fully understand PHP heredoc syntax.
 
 The first completion may wait for static indexing; later suggestions use the cached snapshot. Both indexers exclude `vendor` and common generated directories and never execute project code. Only workspace files are indexed. Index diagnostics are shown locally, never uploaded.
 
