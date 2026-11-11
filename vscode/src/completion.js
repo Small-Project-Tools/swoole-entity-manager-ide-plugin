@@ -1,7 +1,7 @@
 /* Copyright 2026 - Sebastien Kus. Licensed under MIT. */
 'use strict';
 
-const { activeCall, aliasMapForQuery, isSmallFactory, literal } = require('./context');
+const { activeCall, aliasMapForQuery, isSmallFactory, literal, splitArguments } = require('./context');
 const { conditionSuggestions, memberSuggestions, parameterSuggestions } = require('./advanced');
 
 /**
@@ -21,7 +21,19 @@ function getCompletions(index, source, caret) {
     andCondition: { var1: 0, operator: 1, var2: 2 },
     orCondition: { var1: 0, operator: 1, var2: 2 },
     xorCondition: { var1: 0, operator: 1, var2: 2 },
-    leftJoin: { fromAlias: 0, relationAlias: 1, alias: 2 },
+    join: { fromAlias: 0, relationAlias: 1, relation: 1, alias: 2 },
+    leftJoin: { fromAlias: 0, relationAlias: 1, relation: 1, alias: 2 },
+    rightJoin: { fromAlias: 0, relationAlias: 1, relation: 1, alias: 2 },
+    innerJoin: { fromAlias: 0, relationAlias: 1, relation: 1, alias: 2 },
+    addOrderBy: { fieldName: 0, entityAlias: 1 },
+    select: { fields: 0, entityAlias: 1 },
+    addSelect: { fields: 0, entityAlias: 1 },
+    addFieldToUpdate: { fieldName: 0 },
+    count: { fieldName: 0 },
+    sum: { fieldName: 0 },
+    avg: { fieldName: 0 },
+    min: { fieldName: 0 },
+    max: { fieldName: 0 },
     setParameter: { name: 0, parameter: 0 }
   };
   if (named) {
@@ -63,16 +75,32 @@ function getCompletions(index, source, caret) {
   if (fieldMethods.includes(call.method)) {
     if (call.argumentIndex === 0) {
       const dotted = /^\s*(['"])([A-Za-z_]\w*)\.[A-Za-z_]*$/.exec(argument);
-      if (dotted && call.method === 'getFieldForCondition') {
-        const entityName = aliases.get(dotted[2]);
-        if (!entityName || dotted[2] === rootAlias) return [];
-        qualified = { alias: dotted[2], quote: dotted[1] };
-        names = Object.keys(index.entities[entityName]?.fields || {});
+      const explicitAlias = callArgumentLiteral(call, source, caret, 'entityAlias', 1);
+      if (dotted) {
+        const alias = dotted[2];
+        const entityName = aliases.get(alias);
+        if (!entityName || (explicitAlias && explicitAlias !== alias)) return [];
+        const fields = Object.keys(index.entities[entityName]?.fields || {});
+        if (call.method === 'getFieldForCondition') {
+          if (alias === rootAlias) return [];
+          qualified = { alias, quote: dotted[1], mode: 'split' };
+          names = fields;
+        } else if (call.method === 'select' || call.method === 'addSelect') {
+          qualified = { alias, mode: 'projection' };
+          names = fields.map(field => alias + '.' + field);
+        }
       } else if (!argument.includes('.')) {
-        const tail = source.slice(caret).match(/^([^;\n]*)\)/)?.[1] || '';
-        const explicitAlias = /^\s*(['"]).*?\1\s*,\s*(?:entityAlias\s*:\s*)?(['"])(\w+)\2/.exec(argument + tail)?.[3];
         const entity = index.entities[aliases.get(explicitAlias || rootAlias)];
         names = Object.keys(entity?.fields || {});
+        if (!explicitAlias && (call.method === 'select' || call.method === 'addSelect')) {
+          // Include joined aliases, as the native PhpStorm projection completion does.
+          for (const [alias, entityName] of aliases) {
+            if (alias === rootAlias) continue;
+            for (const field of Object.keys(index.entities[entityName]?.fields || {})) {
+              names.push(alias + '.' + field);
+            }
+          }
+        }
       }
     } else if (call.argumentIndex === 1) {
       kind = 'alias';
@@ -84,18 +112,32 @@ function getCompletions(index, source, caret) {
       names = [...aliases.keys()];
     } else if (call.argumentIndex === 1) {
       kind = 'relation';
-      const alias = literal(call.args[0]);
+      const alias = callArgumentLiteral(call, source, caret, 'fromAlias', 0);
       const entity = alias && index.entities[aliases.get(alias)];
       names = Object.keys(entity?.relations || {});
     }
   }
   return names.sort().map(name => ({
     label: name, kind,
-    insertText: qualified ? name + qualified.quote + ', ' + qualified.quote + qualified.alias :
+    insertText: qualified?.mode === 'split' ? name + qualified.quote + ', ' + qualified.quote + qualified.alias :
       (range.quoted ? name : "'" + name + "'"),
     start: range.start, end: range.end,
     detail: kind === 'field' ? context.manager : undefined
   }));
+}
+
+/** Read a literal argument, irrespective of named/positional order or caret position. */
+function callArgumentLiteral(call, source, caret, name, position) {
+  // Complete only the source of the current call; do not search preceding statements.
+  const after = source.slice(caret).match(/^[^;\n]*?\)/)?.[0] || '';
+  const before = source.slice(call.open + 1, caret);
+  const argumentText = before + after.replace(/\)$/, '');
+  const argumentsList = splitArguments(argumentText).map(entry => entry.text.trim());
+  const named = argumentsList.find(entry =>
+    new RegExp('^' + name + '\s*:(?!:)').test(entry));
+  if (named !== undefined) return literal(named.slice(named.indexOf(':') + 1));
+  const positional = argumentsList.filter(entry => !/^[A-Za-z_]\w*\s*:(?!:)/.test(entry));
+  return literal(positional[position]);
 }
 
 function replacement(source, caret, argStart, argument) {

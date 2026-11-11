@@ -67,3 +67,26 @@ test('does not navigate for unrelated get call', () => {
 test('does not navigate for invalid relation from alias', () => {
   assert.equal(select(["  $query->leftJoin('unknown', 'comp<caret>any', 'c');",'}']),null);
 });
+
+test('F12 resolves named field arguments irrespective of argument order', () => {
+  const found = select([
+    "  $query->leftJoin('u', 'company', 'c')->endJoin();",
+    "  $query->getFieldForCondition(entityAlias: 'c', fieldName: 'tit<caret>le');", '}'
+  ]);
+  assert.equal(found?.name, 'title');
+  assert.equal(found?.entry?.file, 'src/Entity/Company.php');
+});
+
+test('F12 resolves joined projections in select and addSelect', () => {
+  const joined = "  $query->leftJoin('u', 'company', 'c')->endJoin();";
+  const projected = select([joined, "  $query->select('c.tit<caret>le');", '}']);
+  assert.equal(projected?.name, 'title');
+  const named = select([joined, "  $query->addSelect(entityAlias: 'c', fields: 'tit<caret>le');", '}']);
+  assert.equal(named?.name, 'title');
+});
+
+test('F12 resolves relation from named join arguments even when reordered', () => {
+  const found = select(["  $query->innerJoin(relationAlias: 'comp<caret>any', fromAlias: 'u');", '}']);
+  assert.equal(found?.name, 'company');
+  assert.equal(found?.entry?.line, 21);
+});

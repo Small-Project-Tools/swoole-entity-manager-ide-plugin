@@ -17,6 +17,7 @@ No database connection, Composer runtime or application bootstrap is needed.
 - Autocompletion of Small manager classes in typed `EntityManagerFactory::get(...)` calls.
 - Autocompletion of mapped fields in `$query->getFieldForCondition(...)`, `addOrderBy(...)`, `select(...)`, `addSelect(...)`.
 - Root alias and mapped relation completion in `leftJoin(...)`, `innerJoin(...)`, `rightJoin(...)`, `join(...)`.
+- Named-argument completion in query field, projection, ordering, and join methods, independent of argument order; joined fields can be selected as qualified projections (for example, `c.title`).
 - Known joined aliases suggested as the second argument of field methods.
 - Detection of `$manager = $factory->get(UserManager::class)` and `$query = $manager->createQueryBuilder('user')` with aliased `use` imports and basic typed manager variables.
 - Cached, per-workspace metadata with automatic invalidation on PHP source edits, plus **Small Entity Manager: Refresh Index** and **Small Entity Manager: Diagnose Completion** commands.
@@ -51,7 +52,7 @@ function demo(EntityManagerFactory $factory): void {
 - Resolve `$this->createQueryBuilder()` inside the matching indexed manager class, without inferring a manager from unrelated classes or namespaces.
 - Complete fields for stored and inline `createDeleteBuilder()` expressions.
 - Require imported factory aliases to resolve to a known Small factory, not an unrelated class with the same short name.
-- Provide Go to Definition (F12) on mapped manager classes, fields and relations. All targets are checked to stay within the current workspace, including symlink resolution.
+- Provide Go to Definition (F12) on mapped manager classes, fields, projections and relations, including reordered named arguments. All targets are checked to stay within the current workspace, including symlink resolution.
 - Avoid offering Small ORM fields after unrelated factory calls.
 
 ### Native indexing (0.4.0)

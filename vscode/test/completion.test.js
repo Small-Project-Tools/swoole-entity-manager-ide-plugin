@@ -161,3 +161,47 @@ test('no proposals in commented-out queries', () => {
   const result = testAt('  // $query->getFieldForCondition(<caret>\n}');
   assert.deepEqual(labels(result), []);
 });
+
+test('named arguments for projection and ordering retain field completion', () => {
+  assert.ok(labels(testAt("  $query->select(fields: '<caret>');\n}")).includes('email'));
+  assert.ok(labels(testAt("  $query->addSelect(fields: '<caret>');\n}")).includes('companyId'));
+  assert.ok(labels(testAt("  $query->addOrderBy(fieldName: '<caret>');\n}")).includes('email'));
+});
+
+test('named field argument resolves explicit joined alias regardless of order', () => {
+  const result = testAt(
+    "  $query->leftJoin('user', 'company', 'c')->endJoin();\n" +
+    "  $query->getFieldForCondition(entityAlias: 'c', fieldName: '<caret>');\n}"
+  );
+  assert.deepEqual(labels(result), ['id', 'name']);
+});
+
+test('joined projections complete qualified aliases without changing the field signature', () => {
+  const joined = "  $query->leftJoin('user', 'company', 'c')->endJoin();\n";
+  const result = testAt(joined + "  $query->select('c.<caret>');\n}");
+  assert.deepEqual(labels(result), ['c.id', 'c.name']);
+  assert.equal(result.proposals.find(x => x.label === 'c.name')?.insertText, 'c.name');
+  const plain = testAt(joined + "  $query->addSelect('<caret>');\n}");
+  assert.ok(labels(plain).includes('c.name'));
+  assert.ok(labels(plain).includes('email'));
+});
+
+test('named projection alias works even when declared before the fields argument', () => {
+  const result = testAt(
+    "  $query->leftJoin('user', 'company', 'c')->endJoin();\n" +
+    "  $query->select(entityAlias: 'c', fields: '<caret>');\n}"
+  );
+  assert.deepEqual(labels(result), ['id', 'name']);
+});
+
+test('named join arguments work in any order', () => {
+  const first = testAt("  $query->leftJoin(fromAlias: 'user', relationAlias: '<caret>');\n}");
+  assert.deepEqual(labels(first), ['company']);
+  const reordered = testAt("  $query->rightJoin(relationAlias: '<caret>', fromAlias: 'user');\n}");
+  assert.deepEqual(labels(reordered), ['company']);
+});
+
+test('unknown qualified projection alias never falls back to root fields', () => {
+  const result = testAt("  $query->select('missing.<caret>');\n}");
+  assert.deepEqual(labels(result), []);
+});

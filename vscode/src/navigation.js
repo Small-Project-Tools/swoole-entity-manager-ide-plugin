@@ -61,7 +61,22 @@ function definitionAt(index, source, caret) {
   // Don't navigate out of the active argument into an unrelated method invocation.
   if (word.left < call.argumentStart) return null;
   const args = completeArguments(source,call.open);
-  if (call.method === 'get' && call.argumentIndex === 0 &&
+  const roleByMethod = {
+    get: { manager: 0, managerClass: 0 },
+    getFieldForCondition: { fieldName: 0, entityAlias: 1 },
+    addOrderBy: { fieldName: 0, entityAlias: 1 },
+    select: { fields: 0, entityAlias: 1 },
+    addSelect: { fields: 0, entityAlias: 1 },
+    addFieldToUpdate: { fieldName: 0 },
+    join: { fromAlias: 0, relationAlias: 1, relation: 1, alias: 2 },
+    innerJoin: { fromAlias: 0, relationAlias: 1, relation: 1, alias: 2 },
+    leftJoin: { fromAlias: 0, relationAlias: 1, relation: 1, alias: 2 },
+    rightJoin: { fromAlias: 0, relationAlias: 1, relation: 1, alias: 2 }
+  };
+  const current = call.args[call.argumentIndex] || '';
+  const named = /^\s*([A-Za-z_]\w*)\s*:(?!:)/.exec(current);
+  const argumentIndex = named ? (roleByMethod[call.method]?.[named[1]] ?? -1) : call.argumentIndex;
+  if (call.method === 'get' && argumentIndex === 0 &&
       isSmallFactory(source,call.receiver,caret)) {
     const requested = argumentAt(args,0,'manager|managerClass');
     const match = /^([\\\w]+)::class$/.exec(requested);
@@ -75,7 +90,7 @@ function definitionAt(index, source, caret) {
   const context = aliasMapForQuery(index,source,caret,call.receiver,call.inlineRootAlias);
   if (!context) return null;
   const {aliases,rootAlias} = context;
-  if (FIELD_METHODS.has(call.method) && call.argumentIndex === 0) {
+  if (FIELD_METHODS.has(call.method) && argumentIndex === 0) {
     const argument = argumentAt(args,0,'fieldName|fields');
     const specified = literal(argument);
     if (!specified) return null;
@@ -89,7 +104,7 @@ function definitionAt(index, source, caret) {
     const entry = entity?.fields?.[field];
     return entry && entry.file ? {kind:'field',name:field,entity:entity.class,entry} : null;
   }
-  if (JOIN_METHODS.has(call.method) && call.argumentIndex === 1) {
+  if (JOIN_METHODS.has(call.method) && argumentIndex === 1) {
     const from = literal(argumentAt(args,0,'fromAlias'));
     const relation = literal(argumentAt(args,1,'relationAlias|relation'));
     if (relation !== word.name) return null;
