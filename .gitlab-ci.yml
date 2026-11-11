@@ -42,9 +42,11 @@ phpstorm_build:
   script:
     - df -h .
     - cd phpstorm
-    # A stalled JetBrains test process must fail with a bounded diagnostic,
-    # rather than occupying scarce Kubernetes runners indefinitely.
-    - timeout --signal=TERM --kill-after=30s 28m gradle --no-daemon --max-workers=1 --console=plain --stacktrace verifyPluginConfiguration test buildPlugin verifyPluginStructure
+    # Keep Kotlin compilation and JetBrains PSI tests in separate Gradle JVMs:
+    # running them together can exceed a 2 GiB Kubernetes runner memory limit.
+    # Bound both phases to prevent a stalled IDE test from blocking the runner.
+    - timeout --signal=TERM --kill-after=30s 16m gradle --no-daemon --max-workers=1 --console=plain --stacktrace verifyPluginConfiguration compileKotlin compileTestKotlin
+    - timeout --signal=TERM --kill-after=30s 16m gradle --no-daemon --max-workers=1 --console=plain --stacktrace test buildPlugin verifyPluginStructure
     - ls -lh build/distributions/*.zip
     - jar tf build/libs/*-base.jar | grep -F 'META-INF/plugin.xml'
     - jar tf build/libs/*-base.jar | grep -F 'dev/smallproject/ide/SmallCompletionContributor.class'

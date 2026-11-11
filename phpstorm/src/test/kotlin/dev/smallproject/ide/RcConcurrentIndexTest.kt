@@ -44,6 +44,40 @@ class RcConcurrentIndexTest {
         }
     }
 
+    @Test fun staleReaderCannotScheduleASecondRefreshAfterAnotherThreadFinishes() {
+        val clockEntered = CountDownLatch(1)
+        val resumeStaleReader = CountDownLatch(1)
+        val now = AtomicLong(1000)
+        val scans = AtomicInteger()
+        val directExecutor = java.util.concurrent.Executor { task -> task.run() }
+        val cache = NativeIndexSnapshotCache(
+            directExecutor,
+            clock = {
+                if (Thread.currentThread().name == "stale-index-reader") {
+                    clockEntered.countDown()
+                    check(resumeStaleReader.await(10, TimeUnit.SECONDS))
+                }
+                now.get()
+            },
+            ttlMillis = 30,
+            indexer = { _, _ -> model(if (scans.incrementAndGet() == 1) "before" else "after") },
+        )
+        assertEquals(listOf("before"), cache.get(root).complete(query))
+        now.addAndGet(31)
+        val stale = Thread({ cache.get(root) }, "stale-index-reader")
+        stale.start()
+        try {
+            assertTrue(clockEntered.await(10, TimeUnit.SECONDS))
+            cache.get(root) // Completes a refresh while the stale reader holds the old snapshot.
+        } finally {
+            resumeStaleReader.countDown()
+            stale.join(10_000)
+        }
+        assertTrue(!stale.isAlive)
+        assertEquals(2, scans.get(), "A stale reader must not schedule an additional rebuild")
+        assertEquals(listOf("after"), cache.get(root).complete(query))
+    }
+
     @Test fun manyParallelExpiredReadsNeverReturnAnEmptyIndex() {
         val workers = Executors.newFixedThreadPool(12)
         val now = AtomicLong(1000)

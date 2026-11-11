@@ -33,7 +33,7 @@ internal class NativeIndexSnapshotCache(
                 Snapshot(clock(), model)
             }.model
         }
-        if (clock() - cached.indexedAt >= ttlMillis) refresh(root)
+        if (clock() - cached.indexedAt >= ttlMillis) refresh(root, cached)
         return cached.model
     }
 
@@ -48,9 +48,15 @@ internal class NativeIndexSnapshotCache(
 
     fun isIndexed(root: File): Boolean = snapshots.containsKey(root.absolutePath)
 
-    private fun refresh(root: File) {
+    private fun refresh(root: File, expired: Snapshot) {
         val key = root.absolutePath
-        if (!refreshing.add(key)) return
+        // A caller may have captured the expired snapshot just before another
+        // thread finished refreshing it. Never schedule another scan for it.
+        if (snapshots[key] !== expired || !refreshing.add(key)) return
+        if (snapshots[key] !== expired) {
+            refreshing.remove(key)
+            return
+        }
         if (!submit {
                 try {
                     val model = indexer(root) {}

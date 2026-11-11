@@ -46,7 +46,8 @@ tasks.test {
     // keeping the entire CI suite alive after the tests have completed.
     maxParallelForks = 1
     forkEvery = 5
-    maxHeapSize = "640m"
+    // Leave native memory headroom for the Gradle daemon under the 2 GiB CI limit.
+    maxHeapSize = "448m"
     jvmArgs("-XX:MaxMetaspaceSize=320m", "-XX:ActiveProcessorCount=2")
     systemProperty("junit.jupiter.execution.timeout.test.method.default", "180s")
 
