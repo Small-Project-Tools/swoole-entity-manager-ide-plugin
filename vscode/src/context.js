@@ -311,6 +311,12 @@ function resolveManagerForVariable(index, source, caret, variable, visited = new
   const typed = new RegExp('\\b([A-Za-z_][\\\\\\w]*)\\s+\\$' + escaped + '\\b','g');
   const matches = [...prefix.matchAll(typed)];
   if (matches.length) return resolveClass(index,prefix,matches.at(-1)[1]);
+  // Recognize an explicit, workspace-local PHPDoc @var contract without executing PHP.
+  // Restrict the declaration to this variable and the current function scope.
+  const documented = new RegExp(String.raw`@var\s+([\\\w]+)\s+\$` + escaped + String.raw`\b`, 'g');
+  const originalScope = source.slice(caret - scope.length, caret);
+  const docMatches = [...originalScope.matchAll(documented)];
+  if (docMatches.length) return resolveClass(index,prefix,docMatches.at(-1)[1]);
   return null;
 }
 

@@ -138,3 +138,41 @@ test('resolves controller accessor without leaking unrelated method declarations
     '}'
   ]), []);
 });
+
+test('PHPDoc @var manager resolves query fields without an interpreter', () => {
+  assert.deepEqual(labels([
+    '<?php',
+    'use Demo\\UserManager;',
+    'function run() {',
+    '  /** @var UserManager $manager */',
+    '  $query = $manager->createQueryBuilder("u");',
+    '  $query->getFieldForCondition("<caret>");',
+    '}'
+  ]), ['email', 'id']);
+});
+
+test('PHPDoc @var does not leak into a different function', () => {
+  assert.deepEqual(labels([
+    '<?php',
+    'use Demo\\UserManager;',
+    'function before() {',
+    '  /** @var UserManager $manager */',
+    '}',
+    'function run() {',
+    '  $query = $manager->createQueryBuilder("u");',
+    '  $query->getFieldForCondition("<caret>");',
+    '}'
+  ]), []);
+});
+
+test('PHPDoc @var does not resolve a different manager variable', () => {
+  assert.deepEqual(labels([
+    '<?php',
+    'use Demo\\UserManager;',
+    'function run() {',
+    '  /** @var UserManager $other */',
+    '  $query = $manager->createQueryBuilder("u");',
+    '  $query->getFieldForCondition("<caret>");',
+    '}'
+  ]), []);
+});
