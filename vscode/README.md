@@ -57,7 +57,7 @@ function demo(EntityManagerFactory $factory): void {
 
 ### Native indexing (0.4.0)
 
-The native scanner uses `php-parser` to extract ORM attributes, manager/entity mapping, inherited/trait fields, relations, imports and namespace resolution. Indexing executes inside a Node worker, not on the VS Code extension-host event loop. It never runs application PHP, Composer, or SQL. Parser limitations may affect unsupported or future PHP syntax; switch to `indexingMode: php` for the legacy indexer when necessary.
+The native scanner uses `php-parser` to extract ORM attributes, manager/entity mapping, inherited/trait fields, relations, imports and namespace resolution. It also indexes legacy entity classes referenced explicitly by a Small manager when the entity class has no `#[OrmEntity]` marker, without indexing unrelated classes. Indexing executes inside a Node worker, not on the VS Code extension-host event loop. It never runs application PHP, Composer, or SQL. Parser limitations may affect unsupported or future PHP syntax; switch to `indexingMode: php` for the legacy indexer when necessary.
 
 ### Scope and limitations
 

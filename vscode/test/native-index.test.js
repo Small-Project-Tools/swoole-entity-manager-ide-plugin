@@ -85,3 +85,55 @@ test('native AST scanner ignores vendor files, symlinks and malformed unrelated 
     assert.ok(result.entities['Demo\\Entity\\User']);
   } finally {fs.rmSync(root,{recursive:true,force:true});fs.rmSync(outside,{recursive:true,force:true});}
 });
+
+test('native index includes mapped legacy entity without explicit OrmEntity marker', async () => {
+  const {root,write} = fixture();
+  try {
+    write('src/Entity/Legacy.php', `<?php
+namespace Demo\\Entity;
+use Small\\SwooleEntityManager\\Entity\\Attribute\\Field;
+class Legacy {
+    use HasTimestamps;
+    #[Field] private string $legacyCode;
+}`);
+    write('src/Manager/LegacyManager.php', `<?php
+namespace Demo\\Manager;
+use Demo\\Entity\\Legacy;
+use Small\\SwooleEntityManager\\EntityManager\\Attribute\\Entity;
+#[Entity(entityClass: Legacy::class)]
+class LegacyManager {}`);
+    const result = await readIndex({workspacePath:root,mode:'native'});
+    assert.ok(result.entities['Demo\\Entity\\Legacy']);
+    assert.ok(result.entities['Demo\\Entity\\Legacy'].fields.legacyCode);
+    assert.ok(result.entities['Demo\\Entity\\Legacy'].fields.createdAt);
+    assert.equal(result.managers['Demo\\Manager\\LegacyManager'].entity,'Demo\\Entity\\Legacy');
+    assert.equal(result.diagnostics.some(x => x.code === 'entity-not-indexed' && x.class === 'Demo\\Manager\\LegacyManager'),false);
+  } finally {fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('unmapped legacy class is not indexed as an ORM entity', async () => {
+  const {root,write} = fixture();
+  try {
+    write('src/Entity/Unmapped.php', `<?php
+namespace Demo\\Entity;
+use Small\\SwooleEntityManager\\Entity\\Attribute\\Field;
+class Unmapped { #[Field] private int $secret; }`);
+    const result = await readIndex({workspacePath:root,mode:'native'});
+    assert.equal(result.entities['Demo\\Entity\\Unmapped'],undefined);
+  } finally {fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('missing mapped class remains an unresolved entity diagnostic', async () => {
+  const {root,write} = fixture();
+  try {
+    write('src/Manager/MissingManager.php', `<?php
+namespace Demo\\Manager;
+use Demo\\Entity\\Missing;
+use Small\\SwooleEntityManager\\EntityManager\\Attribute\\Entity;
+#[Entity(entityClass: Missing::class)]
+class MissingManager {}`);
+    const result=await readIndex({workspacePath:root,mode:'native'});
+    assert.equal(result.entities['Demo\\Entity\\Missing'],undefined);
+    assert.ok(result.diagnostics.some(x => x.code === 'entity-not-indexed' && x.class === 'Demo\\Manager\\MissingManager'));
+  } finally {fs.rmSync(root,{recursive:true,force:true});}
+});

@@ -187,23 +187,30 @@ function indexProject(root) {
   }
   const entities = {};
   const managers = {};
+  // Managers are indexed first: legacy entities may be mapped explicitly by a
+  // Small manager even if #[OrmEntity] is absent in the entity source.
   for (const symbol of symbols.values()) {
     if (symbol.kind !== 'class') continue;
-    if (symbol.attrs.has(ENTITY_ATTRIBUTE)) {
-      const fields = {};
-      const relations = {};
-      collectProperties(symbol,symbols,fields,relations,new Set());
-      entities[symbol.class] = {class:symbol.class,file:symbol.file,line:symbol.line,
-        fields:Object.fromEntries(Object.entries(fields).sort(([a],[b])=>a.localeCompare(b))),
-        relations:Object.fromEntries(Object.entries(relations).sort(([a],[b])=>a.localeCompare(b)))};
-    }
     const managerAttr = symbol.attrs.get(MANAGER_ATTRIBUTE);
-    if (managerAttr) {
-      const entity=classArg(managerAttr,0,'entityClass',symbol.resolve);
-      if (!entity) {diagnostics.push({code:'unresolved-manager-entity',class:symbol.class,file:symbol.file});continue;}
-      managers[symbol.class] = {class:symbol.class,entity,file:symbol.file,line:symbol.line,
-        connection:stringArg(symbol.attrs.get(CONNECTION_ATTRIBUTE),0,'connectionName')};
+    if (!managerAttr) continue;
+    const entity = classArg(managerAttr,0,'entityClass',symbol.resolve);
+    if (!entity) {
+      diagnostics.push({code:'unresolved-manager-entity',class:symbol.class,file:symbol.file});
+      continue;
     }
+    managers[symbol.class] = {class:symbol.class,entity,file:symbol.file,line:symbol.line,
+      connection:stringArg(symbol.attrs.get(CONNECTION_ATTRIBUTE),0,'connectionName')};
+  }
+  const mappedEntities = new Set(Object.values(managers).map(manager => manager.entity));
+  for (const symbol of symbols.values()) {
+    if (symbol.kind !== 'class') continue;
+    if (!symbol.attrs.has(ENTITY_ATTRIBUTE) && !mappedEntities.has(symbol.class)) continue;
+    const fields = {};
+    const relations = {};
+    collectProperties(symbol,symbols,fields,relations,new Set());
+    entities[symbol.class] = {class:symbol.class,file:symbol.file,line:symbol.line,
+      fields:Object.fromEntries(Object.entries(fields).sort(([a],[b])=>a.localeCompare(b))),
+      relations:Object.fromEntries(Object.entries(relations).sort(([a],[b])=>a.localeCompare(b)))};
   }
   const managerMethods = {};
   for (const managerClass of Object.keys(managers)) {
