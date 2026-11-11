@@ -36,6 +36,26 @@ gradle --no-daemon test buildPlugin
 
 Uses Gradle 9.2.1, JDK 21 and the official PhpStorm 2025.1.3 SDK with its bundled PHP plugin. JetBrains' runtime PHP PSI APIs are provided by PhpStorm and are **not** packaged inside our plugin.
 
+### Cross-version PSI tests
+
+The default build and GitLab pipeline use PhpStorm 2025.1.3 with JDK 21.
+To run the real PHP PSI and Ctrl+Space tests against another installed SDK,
+set `SMALL_PHPSTORM_IDE_HOME` to the path visible **inside Gradle**:
+
+```sh
+cd phpstorm
+SMALL_PHPSTORM_IDE_HOME=/opt/PhpStorm-2026.2 gradle --no-daemon --max-workers=1 test
+```
+
+The target must contain `product-info.json` and its bundled PHP plugin.
+PhpStorm 2026.2 requires Java 25 at test runtime; the plugin continues to
+compile with a Java 21 toolchain. For Linux tests, use a Linux-compatible
+IDE runtime. A Windows installation is suitable for JetBrains Plugin Verifier
+but cannot run Linux PSI tests without isolated, test-only runtime metadata.
+
+This override is opt-in: default CI builds, release versions and JDK 21
+compilation remain unchanged.
+
 Output: \`build/distributions/small-entity-manager-phpstorm-<version>.zip\`.
 
 Tagged builds take their version from \`CI_COMMIT_TAG\`. The branch development version is \`1.0.0-RC6\`.

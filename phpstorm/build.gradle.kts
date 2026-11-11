@@ -15,8 +15,14 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        // Official PhpStorm SDK and bundled PHP PSI / PhpTypeProvider4 API.
-        phpstorm("2025.1.3")
+        // Default CI SDK. A local IDE can be selected for cross-version PSI tests.
+        val localIdePath = providers.environmentVariable("SMALL_PHPSTORM_IDE_HOME")
+            .orNull?.takeIf { it.isNotBlank() }
+        if (localIdePath != null) {
+            local(localIdePath)
+        } else {
+            phpstorm("2025.1.3")
+        }
         bundledPlugin("com.jetbrains.php")
         testFramework(TestFrameworkType.Platform)
     }
