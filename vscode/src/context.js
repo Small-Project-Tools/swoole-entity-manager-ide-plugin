@@ -178,6 +178,14 @@ function currentClassSource(source, caret) {
   return range ? source.slice(range.start, range.end) : '';
 }
 
+/** Restrict local receiver inference to the function containing the caret. */
+function currentFunctionSource(source, caret) {
+  const prefix = source.slice(0, caret);
+  const masked = maskStrings(maskComments(prefix));
+  const functions = [...masked.matchAll(/\bfunction\s+(?:&\s*)?[A-Za-z_]\w*\s*\(/g)];
+  return functions.length ? prefix.slice(functions.at(-1).index) : prefix;
+}
+
 /** Only @var inside a PHPDoc block at the beginning of a line is trusted. */
 function documentedManagerType(source, scopeStart, caret, variable) {
   const section = source.slice(scopeStart, caret);
@@ -269,6 +277,10 @@ function aliasMapForQuery(index, source, caret, receiver, inlineRootAlias = unde
   const bindings = [...scope.matchAll(pattern)];
   if (!bindings.length) return null;
   const binding = bindings.at(-1);
+  // A later write of the query variable invalidates its previous builder metadata.
+  const assignments = new RegExp('\\$' + escapeRegExp(variableName) + '\\s*=(?!=|>)', 'g');
+  const latestWrite = [...maskStrings(scope).matchAll(assignments)].at(-1);
+  if (latestWrite && latestWrite.index > binding.index) return null;
   const manager = resolveManagerForVariable(index,source,caret,binding[1]);
   if (!manager || !index.managers[manager]) return null;
   const entity = index.managers[manager].entity;
@@ -385,8 +397,11 @@ function resolveManagerForVariable(index, source, caret, variable, visited = new
   const factories = new RegExp('\\$' + escaped +
     '\\s*=\\s*(\\$this->\\w+|\\$\\w+)\\s*->\\s*get\\s*\\(', 'g');
   const fromFactory = [...maskStrings(scope).matchAll(factories)];
+  const assignments = new RegExp('\\$' + escaped + '\\s*=(?!=|>)', 'g');
+  const latestWrite = [...maskStrings(scope).matchAll(assignments)].at(-1);
   if (fromFactory.length) {
     const selected = fromFactory.at(-1);
+    if (latestWrite && latestWrite.index > selected.index) return null;
     if (!isSmallFactory(source, selected[1], caret)) return null;
     const args = parseCallArguments(scope, selected.index + selected[0].length - 1);
     const manager = factoryManagerClassArgument(args);
@@ -395,10 +410,19 @@ function resolveManagerForVariable(index, source, caret, variable, visited = new
   const accessor = new RegExp('\\$' + escaped +
     '\\s*=\\s*(\\$this->\\w+\\(\\s*\\))\\s*;','g');
   const byAccessor = [...maskStrings(scope).matchAll(accessor)];
-  if (byAccessor.length) return resolveManagerForVariable(index,source,caret,byAccessor.at(-1)[1],visited);
+  if (byAccessor.length) {
+    const selected = byAccessor.at(-1);
+    if (latestWrite && latestWrite.index > selected.index) return null;
+    return resolveManagerForVariable(index,source,caret,selected[1],visited);
+  }
   const typed = new RegExp('\\b([A-Za-z_][\\\\\\w]*)\\s+\\$' + escaped + '\\b','g');
-  const matches = [...maskStrings(prefix).matchAll(typed)];
-  if (matches.length) return resolveClass(index,prefix,matches.at(-1)[1]);
+  const matches = [...maskStrings(scope).matchAll(typed)];
+  if (matches.length) {
+    if (latestWrite) return null;
+    return resolveClass(index,prefix,matches.at(-1)[1]);
+  }
+  // The static @var contract cannot be trusted after an untyped overwrite.
+  if (latestWrite) return null;
   // Keep PHPDoc inference scoped to actual annotation blocks in this function.
   const scopeStart = caret - scope.length;
   const documented = documentedManagerType(source, scopeStart, caret, variable.slice(1));
@@ -437,7 +461,10 @@ function resolveClass(index, source, name) {
 }
 
 function isSmallFactory(source, receiver, caret) {
-  const prefix = maskStrings(maskComments(source.slice(0, caret)));
+  const selectedSource = receiver.startsWith('$this->')
+    ? currentClassSource(source, caret)
+    : currentFunctionSource(source, caret);
+  const prefix = maskStrings(maskComments(selectedSource));
   const property = receiver.replace(/^\$this->|^\$/, '');
   const typed = new RegExp('\\b([\\\\\\w]+)\\s+\\$' + escapeRegExp(property) + '\\b', 'g');
   const types = [...prefix.matchAll(typed)];

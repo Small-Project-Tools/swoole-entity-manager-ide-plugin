@@ -46,6 +46,7 @@ function demo(EntityManagerFactory $factory): void {
 
 ### Context resolution and navigation (0.4.0)
 
+- Resolve local manager types only within the active PHP function and properties only within the containing class. An unrecognized reassignment invalidates previous manager or query-builder inference instead of reusing stale metadata.
 - Recognize managers returned by typed controller accessors, PHPDoc `@var` declarations, and promoted typed properties. Factory resolution supports the Small Core `manager:` and Symfony Bundle `managerClass:` names even when `new:` precedes them. Accessors with abstract return types resolve local delegated calls only when all supported return branches identify the same mapped manager.
 - Support fields on simple inline builders created by createQueryBuilder and from typed controller accessors.
 - Track an inline join in a query assignment and handle the default entity alias when createQueryBuilder has no arguments.
@@ -78,6 +79,8 @@ npm test
 npm run bundle-core
 npx vsce package --no-dependencies
 ```
+
+The JavaScript suite includes end-to-end tests that index synthetic PHP source in the native worker, then exercise editor completion and Go to Definition without running PHP.
 
 The generated VSIX **must** contain `extension/dist/native-worker.js`, `extension/core/bin/sem-ide`, `extension/core/src/Autoload.php` and `extension/src/extension.js`. The GitLab job `vscode_build` checks and publishes this package as a CI artifact. No tag or marketplace publication is performed by the initial feature branch.
 

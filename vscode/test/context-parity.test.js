@@ -452,3 +452,95 @@ test('duplicate named manager specifications are rejected', () => {
     '}'
   ]), []);
 });
+
+test('typed manager from a previous function does not leak into a new function', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'function before(UserManager $manager) {}',
+    'function run() {',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->getFieldForCondition('<caret>');",
+    '}'
+  ]), []);
+});
+
+test('typed Small factory from a previous function does not affect unrelated receiver', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'function before(\\Small\\SwooleEntityManager\\Factory\\EntityManagerFactory $resolver) {}',
+    'function run(OtherFactory $resolver) {',
+    '  $manager = $resolver->get(UserManager::class);',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->getFieldForCondition('<caret>');",
+    '}'
+  ]), []);
+});
+
+test('a local manager reassigned after factory get loses stale type inference', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'function run(\\Small\\SwooleEntityManager\\Factory\\EntityManagerFactory $factory) {',
+    '  $manager = $factory->get(UserManager::class);',
+    '  $manager = null;',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->getFieldForCondition('<caret>');",
+    '}'
+  ]), []);
+});
+
+test('a query reassigned to a non-builder does not retain old alias metadata', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'function run(UserManager $manager) {',
+    "  $query = $manager->createQueryBuilder('u');",
+    '  $query = null;',
+    "  $query->getFieldForCondition('<caret>');",
+    '}'
+  ]), []);
+});
+
+test('factory type in a preceding function cannot certify an untyped unrelated resolver', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'function before(\\Small\\SwooleEntityManager\\Factory\\EntityManagerFactory $resolver) {}',
+    'function run($resolver) {',
+    '  $manager = $resolver->get(UserManager::class);',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->getFieldForCondition('<caret>');",
+    '}'
+  ]), []);
+});
+
+test('manager factory assignment remains usable without later reassignment', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'function run(\\Small\\SwooleEntityManager\\Factory\\EntityManagerFactory $factory) {',
+    '  $manager = $factory->get(UserManager::class);',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->getFieldForCondition('<caret>');",
+    '}'
+  ]), ['email','id']);
+});
+
+test('query can be rebound to a new builder without leaking previous aliases', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'function run(UserManager $manager) {',
+    "  $query = $manager->createQueryBuilder('first');",
+    "  $query->leftJoin('first', 'company', 'old')->endJoin();",
+    "  $query = $manager->createQueryBuilder('new');",
+    "  $query->getFieldForCondition('id', '<caret>');",
+    '}'
+  ]), ['new']);
+});
+
+test('typed manager overwritten with an unknown value cannot provide stale completions', () => {
+  assert.deepEqual(labels([
+    '<?php use Demo\\UserManager;',
+    'function run(UserManager $manager) {',
+    '  $manager = null;',
+    "  $query = $manager->createQueryBuilder('u');",
+    "  $query->getFieldForCondition('<caret>');",
+    '}'
+  ]), []);
+});
