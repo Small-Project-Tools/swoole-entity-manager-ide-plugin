@@ -87,9 +87,9 @@ generated GitLab `small-entity-manager-ide-core-<version>.zip` file is
 ## Tagged releases
 
 Pushing a tag creates a GitLab Release after the mandatory `quality → tests → build → deploy` checks.
-The `deploy` job uploads two versioned, durable assets to the GitLab Generic Package Registry:
-the shared PHP engine source archive and the installable PhpStorm plugin ZIP.
-The `gitlab_release` job publishes both download links in **Deploy → Releases** through the Releases REST API using `CI_JOB_TOKEN` (no personal access token). A manual `repair_release` job can complete a previously failed tagged release without rebuilding archives.
+The `deploy` job uploads three versioned, durable assets to the GitLab Generic Package Registry:
+the shared PHP engine source archive, the installable PhpStorm plugin ZIP, and the installable VS Code extension VSIX.
+The `gitlab_release` job publishes all three download links in **Deploy → Releases** through the Releases REST API using `CI_JOB_TOKEN` (no personal access token). A manual `repair_release` job can complete a previously failed tagged release without rebuilding archives.
 
 Create a tag with `bin/release --dev|--patch|--minor|--major`, or push a tag yourself.
 The version embedded in the PhpStorm plugin matches `CI_COMMIT_TAG` on tagged builds.

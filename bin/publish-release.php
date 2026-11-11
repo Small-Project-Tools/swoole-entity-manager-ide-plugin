@@ -101,6 +101,11 @@ function releaseLinks(string $api, string $projectId, string $tag): array
             'url' => "{$api}/projects/{$projectId}/packages/generic/small-entity-manager-ide-core/{$tag}/small-entity-manager-ide-core-{$tag}.tar.gz",
             'link_type' => 'package',
         ],
+        [
+            'name' => 'VS Code extension (.vsix)',
+            'url' => "{$api}/projects/{$projectId}/packages/generic/small-entity-manager-vscode/{$tag}/small-entity-manager-vscode-{$tag}.vsix",
+            'link_type' => 'package',
+        ],
     ];
 }
 
