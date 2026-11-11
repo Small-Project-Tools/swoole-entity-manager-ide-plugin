@@ -19,7 +19,7 @@ class ExplicitJoinedFieldAliasCompletionTest {
             ${'$'}query = ${'$'}manager->createQueryBuilder('user');
             ${'$'}query->leftJoin('user', 'company', 'c')->endJoin();
             ${'$'}query->$call;
-        """.trimIndent().replace("Demo\\\\", "Demo\\")
+        """.trimIndent()
         val caret = source.indexOf("<caret>")
         assertTrue(caret >= 0)
         val before = source.substring(0, caret)
