@@ -1,6 +1,8 @@
 package dev.smallproject.ide
 
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.psi.util.PsiTreeUtil
+import com.jetbrains.php.lang.psi.elements.MethodReference
 
 /** Real PHP PSI / Ctrl+Space completion. All PHP source is synthetic. */
 class SemPhpStormPsiCompletionTest : BasePlatformTestCase() {
@@ -225,4 +227,49 @@ class SemPhpStormPsiCompletionTest : BasePlatformTestCase() {
         """)
         assertFalse("foreign factory must not claim concrete manager: $results", "catalogSpecific" in results)
     }
+
+    fun testManagerGetTypeIsConcreteWithoutAbstractUnion() {
+        myFixture.configureByText("Controller.php", php("""
+            <?php
+            namespace Synthetic\Demo;
+            use Synthetic\Manager\CatalogManager;
+            use Small\SwooleEntityManager\Factory\EntityManagerFactory;
+            class Controller {
+                function run(EntityManagerFactory @factory): void {
+                    @manager = @factory->get(CatalogManager::class);
+                    @manager->catalogSpecific();
+                }
+            }
+        """))
+        val get = PsiTreeUtil.findChildrenOfType(myFixture.file, MethodReference::class.java)
+            .first { it.name == "get" }
+        val types = get.type.types
+        assertTrue("Concrete manager type must be present: $types",
+            types.any { it.contains("CatalogManager") })
+        assertFalse("Abstract base manager must not be in the result: $types",
+            types.any { it.contains("BaseManager") })
+    }
+
+    fun testNamedBundleFactoryGetTypeIsConcreteWithoutAbstractUnion() {
+        myFixture.configureByText("Controller.php", php("""
+            <?php
+            namespace Synthetic\Demo;
+            use Synthetic\Manager\CatalogManager as Stock;
+            use Small\SwooleEntityManagerBundle\Contract\EntityManagerFactoryInterface;
+            class Controller {
+                function run(EntityManagerFactoryInterface @factory): void {
+                    @manager = @factory->get(new: true, managerClass: Stock::class);
+                    @manager->catalogSpecific();
+                }
+            }
+        """))
+        val get = PsiTreeUtil.findChildrenOfType(myFixture.file, MethodReference::class.java)
+            .first { it.name == "get" }
+        val types = get.type.types
+        assertTrue("Concrete bundle manager type must be present: $types",
+            types.any { it.contains("CatalogManager") })
+        assertFalse("Abstract base manager must not be in bundle result: $types",
+            types.any { it.contains("BaseManager") })
+    }
+
 }
