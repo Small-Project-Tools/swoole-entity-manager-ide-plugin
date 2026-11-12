@@ -1,8 +1,10 @@
 # Small Entity Manager IDE Core
 
+**Canonical repository:** [Small-Project-Tools/swoole-entity-manager-ide-plugin](https://github.com/Small-Project-Tools/swoole-entity-manager-ide-plugin). The GitLab project remains available as the mirror source during CI validation.
+
 ![Small Entity Manager PhpStorm plugin](phpstorm/assets/plugin-logo.png)
 
-Static, read-only project metadata for **Small Swoole Entity Manager Core 3** and the compatible **Symfony Bundle 2**. This repository contains the common engine shared by the VS Code and PhpStorm integrations. The **PhpStorm plugin** in [phpstorm/](phpstorm/) now indexes PHP natively without requiring a local interpreter; the PHP CLI here is retained for other IDE adapters. The [VS Code adapter](vscode/README.md) is available as a first 0.1.0 implementation; it uses the shared PHP CLI indexer and currently requires PHP 8.4+ in the VS Code extension host.
+Static, read-only project metadata for **Small Swoole Entity Manager Core 3** and the compatible **Symfony Bundle 2**. This repository contains the common engine shared by the VS Code and PhpStorm integrations. The **PhpStorm plugin** in [phpstorm/](phpstorm/) now indexes PHP natively without requiring a local interpreter; the PHP CLI here is retained for other IDE adapters. The [VS Code adapter](vscode/README.md) uses a native JavaScript indexer without requiring PHP, with a PHP 8.4+ CLI available as an optional indexing mode.
 
 ## Features
 
@@ -13,9 +15,9 @@ Static, read-only project metadata for **Small Swoole Entity Manager Core 3** an
 - Return `class-string`-based factory return-type hints and argument positions for query builders.
 - Return deterministic JSON with a versioned schema and source locations. Does not execute, instantiate or autoload application classes and never connects to a database.
 
-## VS Code integration (first 0.1.0 version)
+## VS Code integration
 
-The [VS Code extension](vscode/README.md) suggests Small manager classes, mapped fields, join relations and query aliases. Its `vscode_build` CI job runs Node tests and packages an installable VSIX artifact; no Marketplace release occurs on feature branches. Unlike the native PhpStorm plugin, this first adapter requires a PHP 8.4+ CLI for static indexing.
+The [VS Code extension](vscode/README.md) suggests Small manager classes, mapped fields, join relations and query aliases. The `vscode-build` GitHub Actions job runs Node tests and produces a VSIX artifact; no Marketplace release occurs on feature branches. The default indexer runs in JavaScript without requiring a local PHP interpreter.
 
 ## PHP and installation
 
@@ -79,23 +81,21 @@ Because this is a stateless **developer tool**, not a Small web application, no 
 
 ## Installing the PhpStorm plugin
 
-Install `small-entity-manager-phpstorm-<version>.zip` from the
-`phpstorm_build` job artifact or the release asset. The automatically
-generated GitLab `small-entity-manager-ide-core-<version>.zip` file is
-**only a source archive**, not an installable PhpStorm plugin.
+Install the `small-entity-manager-phpstorm-<version>.zip` from a successful
+[GitHub Actions build](https://github.com/Small-Project-Tools/swoole-entity-manager-ide-plugin/actions) (artifact `phpstorm-plugin-and-test-results`)
+or from a [GitHub Release](https://github.com/Small-Project-Tools/swoole-entity-manager-ide-plugin/releases). Do not install GitHub's automatic
+source-code ZIP as a PhpStorm plugin: it does not contain the JetBrains descriptor.
 
 ## Tagged releases
 
-Pushing a tag creates a GitLab Release after the mandatory `quality → tests → build → deploy` checks.
-The `deploy` job uploads three versioned, durable assets to the GitLab Generic Package Registry:
-the shared PHP engine source archive, the installable PhpStorm plugin ZIP, and the installable VS Code extension VSIX.
-The `gitlab_release` job publishes all three download links in **Deploy → Releases** through the Releases REST API using `CI_JOB_TOKEN` (no personal access token). A manual `repair_release` job can complete a previously failed tagged release without rebuilding archives.
+On a new version tag, [GitHub Actions](https://github.com/Small-Project-Tools/swoole-entity-manager-ide-plugin/actions) checks the PHP core,
+VS Code and PhpStorm adapters, then publishes the source archive, the installable
+PhpStorm ZIP and the VS Code VSIX as [release assets](https://github.com/Small-Project-Tools/swoole-entity-manager-ide-plugin/releases) if all
+jobs pass. Historical tags were transferred with their original Git SHA values.
+They do not automatically gain GitHub Release assets merely by being mirrored.
 
-Create a tag with `bin/release --dev|--patch|--minor|--major`, or push a tag yourself.
-The version embedded in the PhpStorm plugin matches `CI_COMMIT_TAG` on tagged builds.
-Branch builds use development version `1.0.0-RC3` until the next tag.
-
-See [docs/releases.md](docs/releases.md).
+GitLab's former release pipeline and package links remain documented for
+historical reference in [docs/releases.md](docs/releases.md).
 
 ## Copyright and license
 

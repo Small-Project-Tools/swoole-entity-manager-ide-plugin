@@ -31,7 +31,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://git.small-project.dev/pub/ide/small-entity-manager-ide-core.git"
+    "url": "https://github.com/Small-Project-Tools/swoole-entity-manager-ide-plugin.git"
   },
   "contributes": {
     "commands": [

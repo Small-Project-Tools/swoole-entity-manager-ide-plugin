@@ -82,7 +82,7 @@ npx vsce package --no-dependencies
 
 The JavaScript suite includes end-to-end tests that index synthetic PHP source in the native worker, then exercise editor completion and Go to Definition without running PHP.
 
-The generated VSIX **must** contain `extension/dist/native-worker.js`, `extension/core/bin/sem-ide`, `extension/core/src/Autoload.php` and `extension/src/extension.js`. The GitLab job `vscode_build` checks and publishes this package as a CI artifact.
-On a version tag, the package uses the tag's SemVer number and the `deploy` job also publishes the installable VSIX as a durable GitLab Generic Package asset; its download appears on the corresponding GitLab Release. No Visual Studio Marketplace publication is performed.
+The generated VSIX **must** contain `extension/dist/native-worker.js`, `extension/core/bin/sem-ide`, `extension/core/src/Autoload.php` and `extension/src/extension.js`. The GitHub Actions `vscode-build` job checks and uploads this package as a CI artifact.
+On new version tags, the VSIX is included in the [GitHub Release](https://github.com/Small-Project-Tools/swoole-entity-manager-ide-plugin/releases) after all quality and build checks succeed. Historical GitLab releases remain available as a separate legacy source. No Visual Studio Marketplace publication is performed.
 
 Copyright 2026 Sébastien Kus. MIT License.

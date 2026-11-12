@@ -2,11 +2,19 @@
 
 The **single source repository** contains the shared PHP core, the PhpStorm plugin and the VS Code extension. Keep this monorepo intact to preserve cross-plugin changes and release tags.
 
-Target: **Small-Project-Tools/small-entity-manager-ide-core**.
+**Verified GitHub mirror:** [Small-Project-Tools/swoole-entity-manager-ide-plugin](https://github.com/Small-Project-Tools/swoole-entity-manager-ide-plugin).
 
-## One-time prerequisites
+On 2026-11-12, all 5 branches and 9 tags were verified against GitLab with
+identical Git SHA values, including `main` at
+`0b49c2a25d83907170fc68771e4e5774f95f73e9`.
+Both GitLab and GitHub repositories are currently **public**.
 
-1. Ensure you have permission to create a **private** repository in Small-Project-Tools named small-entity-manager-ide-core. The migration script creates it if missing. If it already exists, it must be private and its main branch must be empty or identical to GitLab.
+GitHub Actions is configured, but the first successful Actions run and
+associated GitHub Release publication remain to be validated.
+
+## Historical migration procedure (already applied)
+
+1. The existing mirror has been created under `swoole-entity-manager-ide-plugin`, not the original proposed private repository name. The historical migration script assumes a private target and is not required to validate the completed public mirror.
 2. Obtain short-lived GitLab read and GitHub write credentials through an authorized credential helper. Never put credentials in remote URLs, source files or CI logs.
 3. Use an authenticated Git client to copy the complete Git object history.
 
@@ -32,7 +40,7 @@ Run in a clean temporary workspace:
 ~~~sh
 git clone --mirror https://git.small-project.dev/pub/ide/small-entity-manager-ide-core.git small-entity-manager-ide-core.git
 cd small-entity-manager-ide-core.git
-git remote add github https://github.com/Small-Project-Tools/small-entity-manager-ide-core.git
+git remote add github https://github.com/Small-Project-Tools/swoole-entity-manager-ide-plugin.git
 # Transfer only branches and tags, not GitLab's internal merge-request refs.
 git push github 'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*'
 git ls-remote --heads --tags origin | sort > ../gitlab-heads-tags.txt
@@ -52,7 +60,7 @@ Git transfer alone does **not** migrate GitLab issues, merge requests, GitLab Re
 
 ## After the GitHub repository exists
 
-- Update vscode/package.json repository.url and the root README and docs/releases.md to GitHub.
+- `vscode/package.json`, the root README and `docs/releases.md` have been aligned with the actual GitHub repository.
 - Point Packagist to the new repository if the library is registered.
 - Update developer clones to use GitHub origin only after checking the refs and workflows. bin/release pushes to origin.
 - Keep the old GitLab project available read-only, then archive it only after successful verification.

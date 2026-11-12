@@ -1,4 +1,23 @@
-# GitLab releases
+# Releases: GitHub primary, GitLab historical
+
+## New GitHub releases
+
+Canonical repository: https://github.com/Small-Project-Tools/swoole-entity-manager-ide-plugin
+
+A new version tag triggers `.github/workflows/ci.yml` (PHP quality and tests,
+VS Code native indexer tests and VSIX build, PhpStorm Kotlin/PSI tests and ZIP build).
+Only if all jobs succeed does the `release` job publish three assets:
+
+- `small-entity-manager-ide-core-<tag>.tar.gz`
+- `small-entity-manager-phpstorm-<tag>.zip`
+- `small-entity-manager-vscode-<tag>.vsix`
+
+The GitHub workflow uses the built-in `GITHUB_TOKEN`. An existing tag mirrored
+from GitLab is not by itself a new GitHub Release; historical release binary
+assets must be migrated separately if required.
+
+## Historical GitLab release process
+
 
 A version tag triggers the full pipeline: `quality → tests → build → deploy → release`.
 
