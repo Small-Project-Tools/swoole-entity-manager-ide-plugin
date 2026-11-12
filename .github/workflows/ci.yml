@@ -1,0 +1,170 @@
+name: Test and release Small Entity Manager IDE plugins
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: small-entity-manager-ide-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  php-quality:
+    name: PHP core / quality and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: json, tokenizer
+          tools: composer:v2
+          coverage: none
+      - name: Install PHP dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Core and coding standards
+        run: |
+          php bin/self-test
+          find src tests bin -type f \( -name '*.php' -o -name 'sem-ide' -o -name 'self-test' \) -exec php -l {} \;
+          vendor/bin/phpstan analyse --no-progress
+          php bin/apply-copyright.php --check
+      - name: Unit tests
+        run: vendor/bin/pest --testsuite=Unit
+      - name: Functional tests
+        run: vendor/bin/pest --testsuite=Functional
+
+  vscode-build:
+    name: VS Code / test and VSIX
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: vscode
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+      - name: Install and test extension
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+      - name: Set version from tag, when present
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: npm version "$RELEASE_TAG" --allow-same-version --no-git-tag-version
+      - name: Bundle and package installable VSIX
+        run: |
+          npm run bundle-core
+          ./node_modules/.bin/vsce ls --no-dependencies | tee package-files.txt
+          grep -F 'dist/native-worker.js' package-files.txt
+          grep -F 'core/bin/sem-ide' package-files.txt
+          grep -F 'core/src/Autoload.php' package-files.txt
+          grep -F 'src/extension.js' package-files.txt
+          grep -F 'src/navigation.js' package-files.txt
+          ./node_modules/.bin/vsce package --no-dependencies
+          VSIX_VERSION=$(node -p 'require("./package.json").version')
+          test -s "small-entity-manager-vscode-$VSIX_VERSION.vsix"
+          ls -lh "small-entity-manager-vscode-$VSIX_VERSION.vsix"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vscode-vsix
+          path: vscode/small-entity-manager-vscode-*.vsix
+          if-no-files-found: error
+          retention-days: 14
+
+  phpstorm-build:
+    name: PhpStorm / PSI tests and plugin ZIP
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: phpstorm
+    env:
+      CI_COMMIT_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.2.1'
+      - name: Compile in an isolated Gradle JVM
+        run: timeout --signal=TERM --kill-after=30s 16m gradle --no-daemon --max-workers=1 --console=plain verifyPluginConfiguration compileKotlin compileTestKotlin
+      - name: Test and build in a new Gradle JVM
+        run: timeout --signal=TERM --kill-after=30s 16m gradle --no-daemon --max-workers=1 --console=plain test buildPlugin verifyPluginStructure
+      - name: Verify installable plugin and test count
+        run: |
+          ls -lh build/distributions/*.zip
+          jar tf build/libs/*-base.jar | grep -Fx 'META-INF/plugin.xml'
+          jar tf build/libs/*-base.jar | grep -Fx 'dev/smallproject/ide/SmallPhpTypeProvider.class'
+          jar tf build/libs/*-base.jar | grep -Fx 'dev/smallproject/ide/SemManagerAccessorInference.class'
+          test "$(grep -R -o '<testcase ' build/test-results/test --include='TEST-*.xml' | wc -l)" -ge 600
+          mkdir -p build/zip-verification
+          (cd build/zip-verification && jar xf ../distributions/*.zip)
+          test "$(find build/zip-verification -type f -name 'small-entity-manager-phpstorm-*.jar' | wc -l)" -eq 1
+          jar tf "$(find build/zip-verification -type f -name 'small-entity-manager-phpstorm-*.jar' -print -quit)" | grep -Fx 'META-INF/plugin.xml'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phpstorm-plugin-and-test-results
+          path: |
+            phpstorm/build/distributions/*.zip
+            phpstorm/build/test-results/test/*.xml
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub release assets
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [php-quality, vscode-build, phpstorm-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Validate project release tag
+        run: |
+          php -r 'require "src/Autoload.php"; if (!\Small\EntityManagerIde\Release\ReleaseTag::isSupported(getenv("GITHUB_REF_NAME"))) { fwrite(STDERR, "Unsupported version tag\n"); exit(1); }'
+      - uses: actions/download-artifact@v4
+        with:
+          name: vscode-vsix
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: phpstorm-plugin-and-test-results
+          path: downloaded-phpstorm
+      - name: Assemble versioned source and plugin archives
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          plugin_zip=$(find downloaded-phpstorm -type f -name "small-entity-manager-phpstorm-$RELEASE_TAG.zip" -print -quit)
+          test -n "$plugin_zip" && test -s "$plugin_zip"
+          cp "$plugin_zip" release-assets/
+          tar --exclude=.git --exclude=vendor --exclude=node_modules --exclude=dist --exclude=.gradle --exclude=downloaded-phpstorm --exclude=release-assets -czf "release-assets/small-entity-manager-ide-core-$RELEASE_TAG.tar.gz" .
+          test -s "release-assets/small-entity-manager-vscode-$RELEASE_TAG.vsix"
+          test -s "release-assets/small-entity-manager-phpstorm-$RELEASE_TAG.zip"
+          test -s "release-assets/small-entity-manager-ide-core-$RELEASE_TAG.tar.gz"
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            release-assets/small-entity-manager-vscode-*.vsix
+            release-assets/small-entity-manager-phpstorm-*.zip
+            release-assets/small-entity-manager-ide-core-*.tar.gz
