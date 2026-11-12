@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Copyright 2026 - Sebastien Kus. MIT license.
+# Non-destructive, full-history migration of the Small IDE monorepo.
+set -euo pipefail
+
+source_url="${GITLAB_SOURCE_URL:-https://git.small-project.dev/pub/ide/small-entity-manager-ide-core.git}"
+target="${GITHUB_TARGET:-Small-Project-Tools/small-entity-manager-ide-core}"
+
+if [[ ! "$target" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]]; then
+    printf 'Invalid GitHub owner/repository: %s\n' "$target" >&2
+    exit 2
+fi
+
+for command_name in git gh mktemp diff; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+        printf 'Required tool not found: %s\n' "$command_name" >&2
+        exit 2
+    fi
+done
+export GIT_TERMINAL_PROMPT=0
+if ! gh auth status >/dev/null 2>&1; then
+    printf 'Authenticate GitHub first: gh auth login\n' >&2
+    exit 2
+fi
+if ! git ls-remote --exit-code "$source_url" refs/heads/main >/dev/null 2>&1; then
+    printf 'Cannot read private GitLab repository; configure Git credentials for %s\n' "$source_url" >&2
+    exit 2
+fi
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf -- "$tmp_dir"' EXIT
+mirror="$tmp_dir/source.git"
+git clone --quiet --mirror "$source_url" "$mirror"
+git --git-dir="$mirror" fsck --full --no-reflogs --no-progress >/dev/null
+source_main="$(git --git-dir="$mirror" rev-parse refs/heads/main)"
+if [[ -n "${EXPECTED_SOURCE_MAIN_SHA:-}" && "$source_main" != "$EXPECTED_SOURCE_MAIN_SHA" ]]; then
+    printf 'Source main moved since verification: %s != %s\n' "$source_main" "$EXPECTED_SOURCE_MAIN_SHA" >&2
+    exit 1
+fi
+
+# Do not migrate any client-owned code into a Small Project repository.
+# The optional regex adds names known only to the authorized operator.
+forbidden_path_regex="${FORBIDDEN_PATH_REGEX:-(^|/)(client[-_]private|customer[-_]internal|proprietary[-_]project)(/|$)}"
+suspicious_paths="$(
+    git --git-dir="$mirror" log --all --name-only --pretty=format: |
+        LC_ALL=C grep -Ei "$forbidden_path_regex" || true
+)"
+if [[ -n "$suspicious_paths" ]]; then
+    printf 'Client-owned paths found in Git history. Migration stopped:\n%s\n' "$suspicious_paths" >&2
+    exit 1
+fi
+
+github_url="https://github.com/$target.git"
+if existing_visibility="$(gh repo view "$target" --json visibility --jq '.visibility' 2>/dev/null)"; then
+    if [[ "$existing_visibility" != PRIVATE && "$existing_visibility" != private ]]; then
+        printf 'Target repository must be PRIVATE: %s (%s)\n' "$target" "$existing_visibility" >&2
+        exit 1
+    fi
+    current_main="$(git ls-remote "$github_url" refs/heads/main | awk 'NR == 1 {print $1}')"
+    if [[ -n "$current_main" && "$current_main" != "$source_main" ]]; then
+        printf 'Target main differs; refusing to overwrite GitHub history: %s != %s\n' "$current_main" "$source_main" >&2
+        exit 1
+    fi
+else
+    gh repo create "$target" --private \
+        --description 'Small Swoole Entity Manager IDE plugins (PhpStorm + VS Code) and shared metadata engine'
+fi
+
+# GitHub CLI configures its credential helper without printing token values.
+gh auth setup-git >/dev/null
+git --git-dir="$mirror" push "$github_url" 'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*'
+gh repo edit "$target" --default-branch main
+
+# Verify every branch and annotated/lightweight tag by its immutable object SHA.
+git --git-dir="$mirror" for-each-ref --format='%(objectname) %(refname)' refs/heads refs/tags |
+    LC_ALL=C sort > "$tmp_dir/expected"
+git ls-remote --refs "$github_url" 'refs/heads/*' 'refs/tags/*' |
+    awk '{print $1 " " $2}' | LC_ALL=C sort > "$tmp_dir/actual"
+if ! diff -u "$tmp_dir/expected" "$tmp_dir/actual"; then
+    printf 'Reference verification failed; GitLab source has not been modified.\n' >&2
+    exit 1
+fi
+
+if [[ "$(gh repo view "$target" --json visibility --jq '.visibility')" != PRIVATE ]]; then
+    printf 'GitHub repository privacy changed unexpectedly.\n' >&2
+    exit 1
+fi
+printf 'MIGRATION VERIFIED: %s\n' "$target"
+printf 'MAIN SHA: %s\n' "$source_main"
+printf 'BRANCHES: %s\n' "$(git --git-dir="$mirror" for-each-ref refs/heads --format='%(refname)' | wc -l)"
+printf 'TAGS: %s\n' "$(git --git-dir="$mirror" for-each-ref refs/tags --format='%(refname)' | wc -l)"
+printf 'Source GitLab repository has not been archived, deleted or rewritten.\n'

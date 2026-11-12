@@ -6,11 +6,26 @@ Target: **Small-Project-Tools/small-entity-manager-ide-core**.
 
 ## One-time prerequisites
 
-1. Create an **empty private** repository under Small-Project-Tools named small-entity-manager-ide-core, without README, .gitignore or license. GitLab is private; do not make GitHub public until reviewing the entire history.
+1. Ensure you have permission to create a **private** repository in Small-Project-Tools named small-entity-manager-ide-core. The migration script creates it if missing. If it already exists, it must be private and its main branch must be empty or identical to GitLab.
 2. Obtain short-lived GitLab read and GitHub write credentials through an authorized credential helper. Never put credentials in remote URLs, source files or CI logs.
 3. Use an authenticated Git client to copy the complete Git object history.
 
 ## Copy branches, history and tags
+
+The recommended, tested procedure is:
+
+~~~sh
+bash tests/Migration/migrate-to-github-smoke.sh
+bash bin/migrate-to-github
+~~~
+
+The script refuses public repositories and divergent main branches, compares all
+branch/tag SHA values, and stops on generic sensitive paths. Set
+`FORBIDDEN_PATH_REGEX` for additional project-specific names at runtime;
+do not commit confidential project names to this repository.
+
+The manual equivalent is:
+
 
 Run in a clean temporary workspace:
 
